@@ -3,7 +3,7 @@ import { CoinlistItem } from "@/types/CoinList";
 
 // Helius API endpoint
 const HELIUS_API_KEY = "405da4aa-d376-44ce-87eb-8328fb80b562"; // User's actual API key
-const HELIUS_RPC_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
+const HELIUS_RPC_URL = "https://mainnet.helius-rpc.com/v0";
 
 // Interface for the DAS API response
 interface Asset {
@@ -96,6 +96,7 @@ export async function getHeliusTokens(topTokenCount = 50): Promise<CoinlistItem[
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-api-key': HELIUS_API_KEY
       },
       body: JSON.stringify(payload)
     });
@@ -200,6 +201,7 @@ export async function getUserTokenBalancesHelius(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-api-key': HELIUS_API_KEY
       },
       body: JSON.stringify(payload)
     });
