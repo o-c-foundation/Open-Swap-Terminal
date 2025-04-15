@@ -13,21 +13,13 @@ import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import SolLogo from "./solana-logo.webp";
-import CardsGrid from "@/components/CardsGrid";
-import { ReactNode, useEffect, useState, useRef } from "react";
-import React from "react";
+import { useEffect, useState } from "react";
 import { Connection, PublicKey } from "@solana/web3.js";
-import { useWallet, WalletContextState } from "@solana/wallet-adapter-react";
-import Pricing from "@/components/pricing";
-import { WalletMultiButton } from "@/components/WalletMultiButton";
-import { SwapHistory, TransactionType } from "@/components/SwapHistoryContext";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { CoinlistItem, defaultList } from "@/types/CoinList";
 import useJupiterSwap from "@/hooks/useJupiterSwap";
 import SwapComponentCard from "@/components/SwapComponentCard";
 import { QuoteResponse } from "@jup-ag/api";
-import { useSwapHistory } from "@/components/SwapHistoryContext";
-import { useRPC } from "@/components/RPCContext";
-import Header from "@/components/Header";
 import { getSolflareTokens } from "@/util/solflareTokens";
 import { privateConnection } from "@/util/privateRpc";
 
@@ -42,6 +34,7 @@ import {
 } from "@solana/wallet-adapter-wallets";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import "./global.css";
+import CoinSelectDialog from "@/components/CoinSelectDialog";
 
 export default function Home() {
   const {
@@ -123,9 +116,9 @@ export default function Home() {
     try {
       const adapter = wallet.adapter;
       // Use optional chaining for signTransaction which might not be available
-      const signTransaction = (tx: any) => {
-        if (adapter.signTransaction) {
-          return adapter.signTransaction(tx);
+      const signTransaction = async (tx: any) => {
+        if (adapter && typeof (adapter as any).signTransaction === 'function') {
+          return (adapter as any).signTransaction(tx);
         } else {
           throw new Error("Wallet does not support signTransaction");
         }
@@ -205,9 +198,9 @@ export default function Home() {
           <Grid item xs={12} md={12}>
             <SwapComponentCard
               inputToken={safeToken(inputToken)}
-              setInputToken={setInputToken}
+              setInputToken={setInputToken as any}
               outputToken={safeToken(outputToken)}
-              setOutputToken={setOutputToken}
+              setOutputToken={setOutputToken as any}
               inputAmount={inputAmount}
               setInputAmount={setInputAmount}
               outputAmount={quote}
@@ -226,7 +219,7 @@ export default function Home() {
         open={modalOpen}
         setModalOpen={setModalOpen}
         changesSide={changesSide}
-        setInputToken={setInputToken}
+        setInputToken={setInputToken as any}
         coinList={tokenList}
         setCoinList={setTokenList}
         coinListLoading={loading}
