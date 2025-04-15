@@ -5,7 +5,6 @@ import DappBar from "@/components/DappBar";
 import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { CoinlistItem } from "@/types/CoinList";
-import { getSolflareTokens } from "@/util/solflareTokens";
 import { useRPC } from "@/util/RPCContext";
 import NextLink from "next/link";
 import dynamic from 'next/dynamic';
@@ -15,40 +14,81 @@ const TradingViewChart = dynamic(() => import('../../components/TradingViewChart
   loading: () => <div style={{ height: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress /></div>,
 });
 
+// Static list of popular tokens
+const POPULAR_TOKENS: CoinlistItem[] = [
+  {
+    mint: new PublicKey("So11111111111111111111111111111111111111112"),
+    symbol: "SOL",
+    name: "Solana",
+    decimals: 9,
+    logo: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
+    uiAmount: 0,
+  },
+  {
+    mint: new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
+    symbol: "USDC",
+    name: "USD Coin",
+    decimals: 6,
+    logo: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
+    uiAmount: 0,
+  },
+  {
+    mint: new PublicKey("DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"),
+    symbol: "BONK",
+    name: "Bonk",
+    decimals: 5,
+    logo: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263/logo.png",
+    uiAmount: 0,
+  },
+  {
+    mint: new PublicKey("7i5KKsX2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfRx"),
+    symbol: "GMT",
+    name: "STEPN",
+    decimals: 9,
+    logo: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/7i5KKsX2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfRx/logo.png",
+    uiAmount: 0,
+  },
+  {
+    mint: new PublicKey("mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So"),
+    symbol: "mSOL",
+    name: "Marinade staked SOL",
+    decimals: 9,
+    logo: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So/logo.png",
+    uiAmount: 0,
+  },
+  {
+    mint: new PublicKey("7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs"),
+    symbol: "JUP",
+    name: "Jupiter",
+    decimals: 8,
+    logo: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs/logo.png",
+    uiAmount: 0,
+  }
+];
+
 export default function ChartsPage() {
   const { connected, publicKey } = useWallet();
   const { rpcConfig } = useRPC();
   const [selectedToken, setSelectedToken] = useState<CoinlistItem | null>(null);
-  const [tokenList, setTokenList] = useState<CoinlistItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load tokens using Solflare API
+  // Initialize with popular tokens
   useEffect(() => {
-    async function loadTokens() {
-      try {
-        setLoading(true);
-        // Load tokens list using Solflare API
-        const tokens = await getSolflareTokens(100);
-        setTokenList(tokens);
-        
-        // Set default token to SOL
-        if (tokens.length > 0) {
-          const sol = tokens.find(t => t.symbol === "SOL") || tokens[0];
-          setSelectedToken(sol);
-        }
-      } catch (error) {
-        console.error("Error loading tokens:", error);
-      } finally {
-        setLoading(false);
-      }
+    try {
+      setLoading(true);
+      // Set default token to SOL
+      const sol = POPULAR_TOKENS.find(t => t.symbol === "SOL") || POPULAR_TOKENS[0];
+      setSelectedToken(sol);
+    } catch (error) {
+      console.error("Error setting up tokens:", error);
+    } finally {
+      setLoading(false);
     }
-
-    loadTokens();
   }, []);
 
   const handleTokenChange = (event: any) => {
     const selectedMint = event.target.value;
-    const token = tokenList.find(t => t.mint.toString() === selectedMint);
+    const token = POPULAR_TOKENS.find(t => t.mint.toString() === selectedMint);
     if (token) {
       setSelectedToken(token);
     }
@@ -152,7 +192,7 @@ export default function ChartsPage() {
                 label="Token"
                 disabled={loading}
               >
-                {tokenList.map((token) => (
+                {POPULAR_TOKENS.map((token) => (
                   <MenuItem key={token.mint.toString()} value={token.mint.toString()}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       {token.logo && (
