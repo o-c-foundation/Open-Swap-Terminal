@@ -376,3 +376,40 @@ body::after {
   color: rgba(255, 255, 255, 0.5) !important;
   -webkit-text-fill-color: #10141f;
 }
+
+/* Jupiter Terminal styling */
+.jupiter-terminal-container {
+  --bg-color: rgba(0, 0, 0, 0.6);
+  --text-color: white;
+  --accent-color: #FFC107;
+  
+  border-radius: 16px !important;
+  font-family: "DM Sans", "Inter", sans-serif !important;
+}
+
+/* Give the terminal some extra space */
+#jupiter-swap-container {
+  min-height: 500px;
+  overflow: hidden;
+  border-radius: 16px;
+  backdrop-filter: blur(10px);
+}
+
+/* Custom styling for Jupiter elements if needed */
+.jupiter-terminal-container button {
+  border-radius: 8px !important;
+}
+
+/* Match our theme with Jupiter's UI */
+.jupiter-terminal-container input,
+.jupiter-terminal-container select {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+  color: white !important;
+  border-color: rgba(255, 193, 7, 0.3) !important;
+}
+
+/* Jupiter Terminal token selector */
+.jupiter-terminal-container [role="combobox"] {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+  border-color: rgba(255, 193, 7, 0.3) !important;
+}

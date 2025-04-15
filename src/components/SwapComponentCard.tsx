@@ -1,137 +1,66 @@
 //parent component for swaps, to be used with wallet context and useWallet()
 
-import { Card, Button, Typography, Box } from "@mui/material";
-import SwapInputComponent from "./SwapInputComponent";
-import { CoinlistItem } from "@/types/CoinList";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { privateConnection } from "@/util/privateRpc";
-import { useDebouncedCallback } from "use-debounce";
+import { Card, Typography, Box } from "@mui/material";
 import SwapVertIcon from '@mui/icons-material/SwapVert';
-import SlippageSelector from "./SlippageSelector";
-import PercentageButtons from "./PercentageButtons";
+import React, { useEffect } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useConnection } from "@solana/wallet-adapter-react";
 
-interface SwapComponentCardProps {
-  direction?: "up" | "down";
-  setChangesSide?: React.Dispatch<React.SetStateAction<"A" | "B">>;
-  setModalOpen?: React.Dispatch<React.SetStateAction<boolean>>;
-  inputToken: CoinlistItem;
-  setInputToken: React.Dispatch<React.SetStateAction<CoinlistItem>>;
-  outputToken: CoinlistItem;
-  setOutputToken: React.Dispatch<React.SetStateAction<CoinlistItem>>;
-  inputAmount: string;
-  setInputAmount: React.Dispatch<React.SetStateAction<string>>;
-  outputAmount: string;
-  setOutputAmount: React.Dispatch<React.SetStateAction<string>>;
-  swapping: boolean;
-  setSwapping?: (() => Promise<void>) | React.Dispatch<React.SetStateAction<boolean>>;
-  quotebag?: any;
-  quoting?: boolean;
-  setQuoting?: React.Dispatch<React.SetStateAction<boolean>>;
-  quote?: string;
-  executeSwap?: () => Promise<void>;
-  jupiterSwap?: any;
-}
+// This new component will use Jupiter Terminal in integrated mode
+export default function SwapComponentCard() {
+  const { connection } = useConnection();
+  const wallet = useWallet();
 
-export default function SwapComponentCard(props: SwapComponentCardProps) {
-  const {
-    direction,
-    setChangesSide,
-    setModalOpen,
-    inputToken,
-    setInputToken,
-    outputToken,
-    setOutputToken,
-    inputAmount,
-    setInputAmount,
-    outputAmount,
-    setOutputAmount,
-    quotebag,
-    swapping,
-    setSwapping,
-    quoting,
-    setQuoting,
-    quote,
-    executeSwap,
-    jupiterSwap,
-  } = props;
+  useEffect(() => {
+    // Add the Jupiter Terminal script to the document
+    const script = document.createElement('script');
+    script.src = 'https://terminal.jup.ag/main-v2.js';
+    script.setAttribute('data-preload', '');
+    document.head.appendChild(script);
 
-  const {
-    connect,
-    select,
-    wallet,
-    publicKey,
-    connected,
-  } = useWallet();
-
-  const [slippage, setSlippage] = useState<number>(0.5); // Default 0.5%
-
-  // Provide fallback for quotebag/quoting
-  const quoteBagToUse = quotebag || { 
-    setQuoting: setQuoting || (() => {}),
-    quoting: quoting || false,
-    quote: quote || "0"
-  };
-
-  const debounced = useDebouncedCallback(() => {
-    console.log("debounced called");
-    if (quoteBagToUse.setQuoting) {
-      quoteBagToUse.setQuoting(true);
-    } else if (setQuoting) {
-      setQuoting(true);
-    }
-  }, 800);
-
-  // Swap token positions handler
-  const handleSwapPositions = useCallback(() => {
-    const tempToken = inputToken;
-    setInputToken(outputToken);
-    setOutputToken(tempToken);
-    if (quoteBagToUse.setQuoting) {
-      quoteBagToUse.setQuoting(true);
-    } else if (setQuoting) {
-      setQuoting(true);
-    }
-  }, [inputToken, outputToken, setInputToken, setOutputToken, quoteBagToUse, setQuoting]);
-
-  // Execute swap handler
-  const handleSwap = useCallback(() => {
-    if (!connected) {
-      alert("Please connect your wallet first");
-      return;
-    }
-    
-    // Use either provided executeSwap or setSwapping
-    if (executeSwap) {
-      executeSwap();
-    } else if (typeof setSwapping === 'function') {
-      (setSwapping as () => Promise<void>)();
-    } else if (setSwapping) {
-      (setSwapping as React.Dispatch<React.SetStateAction<boolean>>)(true);
-    }
-  }, [connected, setSwapping, executeSwap]);
-
-  // Calculate max amount that can be swapped
-  const maxInputAmount = useMemo(() => {
-    if (!inputToken || !inputToken.uiAmount) return 0;
-    return inputToken.uiAmount;
-  }, [inputToken]);
-
-  // Handle percentage button click
-  const handlePercentageClick = useCallback((percentage: number) => {
-    if (maxInputAmount > 0) {
-      const amount = (maxInputAmount * percentage / 100).toFixed(
-        // Use 6 decimal places for larger amounts, more for smaller amounts
-        maxInputAmount > 1 ? 6 : 9
-      );
-      setInputAmount(amount);
-      if (quoteBagToUse.setQuoting) {
-        quoteBagToUse.setQuoting(true);
-      } else if (setQuoting) {
-        setQuoting(true);
+    // Initialize Jupiter Terminal after the script is loaded
+    script.onload = () => {
+      // Check if Jupiter object exists
+      if (window.Jupiter) {
+        initJupiterTerminal();
       }
+    };
+
+    // Cleanup function
+    return () => {
+      document.head.removeChild(script);
+      // Close Jupiter Terminal if it's open
+      if (window.Jupiter && typeof window.Jupiter.close === 'function') {
+        window.Jupiter.close();
+      }
+    };
+  }, []);
+
+  // Function to sync wallet state with Jupiter Terminal
+  useEffect(() => {
+    if (window.Jupiter && window.Jupiter.syncProps && wallet) {
+      window.Jupiter.syncProps({ 
+        passthroughWalletContextState: wallet 
+      });
     }
-  }, [maxInputAmount, setInputAmount, quoteBagToUse, setQuoting]);
+  }, [wallet, wallet.connected]);
+
+  // Initialize Jupiter Terminal
+  const initJupiterTerminal = () => {
+    window.Jupiter.init({
+      displayMode: "integrated",
+      integratedTargetId: "jupiter-swap-container",
+      endpoint: connection.rpcEndpoint,
+      enableWalletPassthrough: true, // Use wallet adapter from your app
+      containerStyles: {
+        width: '100%',
+        height: '100%',
+        borderRadius: '16px',
+        color: 'white',
+      },
+      containerClassName: 'jupiter-terminal-container'
+    });
+  };
 
   return (
     <Card
@@ -173,141 +102,58 @@ export default function SwapComponentCard(props: SwapComponentCardProps) {
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <SwapVertIcon sx={{ color: '#FFC107', mr: 2, fontSize: 30 }} />
           <Typography variant="h4" style={{ fontWeight: 700 }}>
-        Swap
-      </Typography>
-        </Box>
-        <SlippageSelector 
-          slippage={slippage} 
-          onSlippageChange={setSlippage} 
-        />
-      </Box>
-      
-      <SwapInputComponent
-        setQuoting={quoteBagToUse.setQuoting}
-        direction="up"
-        debounced={debounced}
-        value={inputAmount}
-        setValue={setInputAmount}
-        setChangesSide={setChangesSide || undefined}
-        setModalOpen={setModalOpen || undefined}
-        inputToken={inputToken}
-        setInputToken={setInputToken}
-      />
-      
-      {/* Percentage buttons for input token */}
-      <Box sx={{ mt: 1, mb: 2 }}>
-        <PercentageButtons 
-          onPercentageClick={handlePercentageClick}
-          maxValue={maxInputAmount}
-          label={`of ${inputToken.symbol || 'token'} balance`}
-        />
-      </Box>
-      
-      {/* Swap direction button */}
-      <Box 
-        sx={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          my: -1, 
-          position: 'relative', 
-          zIndex: 2 
-        }}
-      >
-        <Box 
-          sx={{ 
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            borderRadius: '50%',
-            width: 40,
-            height: 40,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            border: '1px solid rgba(255, 193, 7, 0.3)',
-            transition: 'all 0.2s ease',
-            '&:hover': {
-              backgroundColor: 'rgba(255, 193, 7, 0.1)',
-            }
-          }}
-          onClick={handleSwapPositions}
-        >
-          <SwapVertIcon sx={{ color: '#FFC107' }} />
-        </Box>
-      </Box>
-      
-      <SwapInputComponent
-        setQuoting={quoteBagToUse.setQuoting}
-        direction="down"
-        value={quoteBagToUse.quoting ? "..." : quoteBagToUse.quote}
-        setValue={setOutputAmount}
-        setChangesSide={setChangesSide || undefined}
-        setModalOpen={setModalOpen || undefined}
-        inputToken={outputToken}
-        setInputToken={setOutputToken}
-        debounced={undefined}
-      />
-      
-      {/* Swap Rate Display */}
-      {!quoteBagToUse.quoting && quoteBagToUse.quote && quoteBagToUse.quote !== "0" && (
-        <Box sx={{ mb: 2, mt: 1, textAlign: 'right' }}>
-          <Typography variant="caption" sx={{ color: '#999' }}>
-            1 {inputToken.symbol} ≈ {(Number(quoteBagToUse.quote) / Number(inputAmount)).toFixed(6)} {outputToken.symbol}
+            Swap
           </Typography>
         </Box>
-      )}
-      
-      {/* Slippage info */}
-      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="caption" sx={{ color: '#999' }}>
-          Slippage Tolerance: {slippage}%
-        </Typography>
-        <Typography variant="caption" sx={{ color: '#999' }}>
-          Est. Fee: 0.25%
-        </Typography>
       </Box>
       
-      <Card 
+      {/* Container for Jupiter Terminal */}
+      <Box 
+        id="jupiter-swap-container" 
         sx={{ 
-          p: 0, 
-          m: 0, 
-          borderRadius: 2, 
-          background: 'linear-gradient(45deg, #FFC107, #FFA000)',
+          width: '100%', 
+          minHeight: '500px',
+          borderRadius: '16px',
           overflow: 'hidden',
-          transition: 'all 0.3s ease',
-          '&:hover': {
-            transform: 'translateY(-2px)',
-            boxShadow: '0 6px 12px rgba(255, 193, 7, 0.3)',
-          }
         }}
-      >
-        <Button
-          color="inherit"
-          variant="contained"
-          fullWidth
-          size="large"
-          disabled={swapping || quoteBagToUse.quoting || !connected || Number(quoteBagToUse.quote) <= 0}
-          onClick={handleSwap}
-          sx={{ 
-            py: 1.5, 
-            color: '#000000', 
-            fontWeight: 700,
-            fontSize: '1.1rem',
-            textTransform: 'none',
-            '&:disabled': {
-              backgroundColor: 'rgba(255, 193, 7, 0.5)',
-              color: 'rgba(0, 0, 0, 0.6)',
-            }
-          }}
-        >
-          {!connected 
-            ? "Connect Wallet" 
-            : swapping 
-              ? "Swapping..." 
-              : quoteBagToUse.quoting 
-                ? "Fetching Price..." 
-                : "Swap"}
-        </Button>
-      </Card>
+      ></Box>
+
+      {/* Add Jupiter Terminal's CSS */}
+      <style jsx global>{`
+        .jupiter-terminal-container {
+          border-radius: 16px;
+          font-family: Inter, sans-serif;
+        }
+      `}</style>
     </Card>
   );
+}
+
+// Add the types for the Jupiter Terminal window object
+declare global {
+  interface Window {
+    Jupiter: {
+      init: (config: {
+        displayMode?: 'integrated' | 'modal' | 'widget';
+        integratedTargetId?: string;
+        endpoint: string;
+        enableWalletPassthrough?: boolean;
+        containerStyles?: React.CSSProperties;
+        containerClassName?: string;
+        strictTokenList?: boolean;
+        formProps?: {
+          fixedInputMint?: boolean;
+          fixedOutputMint?: boolean;
+          swapMode?: 'ExactIn' | 'ExactOut';
+          fixedAmount?: boolean;
+          initialAmount?: string;
+          initialInputMint?: string;
+          initialOutputMint?: string;
+        };
+        defaultExplorer?: 'Solana Explorer' | 'Solscan' | 'Solana Beach' | 'SolanaFM';
+      }) => void;
+      close: () => void;
+      syncProps: (props: { passthroughWalletContextState: any }) => void;
+    };
+  }
 }

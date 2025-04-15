@@ -96,7 +96,7 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
         
         try {
           // Force set loading to true
-          setCoinListLoading(true);
+        setCoinListLoading(true);
           console.log("CoinSelectDialog: Fetching tokens from Solflare API...");
           
           // First try with default tokens 
