@@ -197,7 +197,24 @@ export async function getUserTokenBalances(
     // Extract mint addresses and balances
     const tokensWithBalances: { [mintAddress: string]: { balance: number, decimals: number }} = {};
     
-    tokenAccounts.value.forEach(account => {
+    // Define the type for token accounts
+    interface TokenAccount {
+      account: {
+        data: {
+          parsed: {
+            info: {
+              mint: string;
+              tokenAmount: {
+                amount: string;
+                decimals: number;
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    tokenAccounts.value.forEach((account: TokenAccount) => {
       const parsedInfo = account.account.data.parsed.info;
       const mintAddress = parsedInfo.mint;
       const decimals = parsedInfo.tokenAmount.decimals;
