@@ -29,10 +29,60 @@ import React, { useMemo, useState, useEffect } from "react";
 import SolanaLogo from "./Solana-Logo.png";
 import { CoinlistItem, defaultList } from "@/types/CoinList";
 import { Connection, clusterApiUrl, PublicKey } from "@solana/web3.js";
-import { Metaplex } from "@metaplex-foundation/js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { getSolflareTokens, searchSolflareTokens, getUserTokenBalances } from "@/util/solflareTokens";
-import { privateConnection } from "@/util/privateRpc";
+import { useRPC } from "@/util/RPCContext";
+
+// Static list of popular tokens - same as in charts page
+const POPULAR_TOKENS: CoinlistItem[] = [
+  {
+    mint: new PublicKey("So11111111111111111111111111111111111111112"),
+    symbol: "SOL",
+    name: "Solana",
+    decimals: 9,
+    logo: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
+    uiAmount: 0,
+  },
+  {
+    mint: new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
+    symbol: "USDC",
+    name: "USD Coin",
+    decimals: 6,
+    logo: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
+    uiAmount: 0,
+  },
+  {
+    mint: new PublicKey("DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"),
+    symbol: "BONK",
+    name: "Bonk",
+    decimals: 5,
+    logo: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263/logo.png",
+    uiAmount: 0,
+  },
+  {
+    mint: new PublicKey("7i5KKsX2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfRx"),
+    symbol: "GMT",
+    name: "STEPN",
+    decimals: 9,
+    logo: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/7i5KKsX2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfRx/logo.png",
+    uiAmount: 0,
+  },
+  {
+    mint: new PublicKey("mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So"),
+    symbol: "mSOL",
+    name: "Marinade staked SOL",
+    decimals: 9,
+    logo: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So/logo.png",
+    uiAmount: 0,
+  },
+  {
+    mint: new PublicKey("7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs"),
+    symbol: "JUP",
+    name: "Jupiter",
+    decimals: 8,
+    logo: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs/logo.png",
+    uiAmount: 0,
+  }
+];
 
 interface CoinSelectDialogProps {
   open: boolean;
@@ -66,434 +116,323 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
   const [errorMessage, setErrorMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [displayedTokens, setDisplayedTokens] = useState<CoinlistItem[]>([]);
-
-  const connection = useMemo(
-    () => privateConnection,
-    []
-  );
   
+  const { connection } = useConnection();
   const { publicKey, connected } = useWallet();
 
-  // Load Solflare tokens when dialog opens
+  // Initialize tokens when dialog opens
   useEffect(() => {
-    let isActive = true;
-    let timeoutId: NodeJS.Timeout | null = null;
-
-    async function loadSolflareTokens() {
-      if (open) {
-        console.log("CoinSelectDialog: Starting to load tokens from Solflare API...");
-        console.log(`CoinSelectDialog: Current coinListLoading state: ${coinListLoading}`);
-        
-        // Set a timeout to prevent the loading state from getting stuck
-        timeoutId = setTimeout(() => {
-          if (isActive && coinListLoading) {
-            console.log("CoinSelectDialog: Loading timeout reached, resetting loading state");
-            setCoinListLoading(false);
-            setErrorMessage("Token loading timed out. Please try again.");
-            setErrorOpen(true);
-          }
-        }, 15000); // 15 second timeout
-        
-        try {
-          // Force set loading to true
+    if (open) {
+      try {
         setCoinListLoading(true);
-          console.log("CoinSelectDialog: Fetching tokens from Solflare API...");
-          
-          // First try with default tokens 
-          if (coinList.length === 0) {
-            setCoinList([{
-              mint: new PublicKey("So11111111111111111111111111111111111111112"),
-              name: "Solana",
-              symbol: "SOL",
-              decimals: 9,
-              logo: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
-              balance: 0,
-              uiAmount: 0
-            }]);
-            console.log("CoinSelectDialog: Set default SOL token while fetching");
-          }
-          
-          // Add debugging for network connectivity
-          try {
-            const testResponse = await fetch('https://token-list-api.solana.cloud/v1/list?limit=1', { 
-              method: 'GET', 
-              headers: { 'Content-Type': 'application/json' }
-            });
-            console.log(`CoinSelectDialog: Network test to Solflare API: ${testResponse.ok ? 'successful' : 'failed'} (${testResponse.status})`);
-          } catch (networkError) {
-            console.error("CoinSelectDialog: Network connectivity test failed:", networkError);
-          }
-          
-          // Fetch tokens from Solflare API
-          if (connected && publicKey) {
-            console.log("CoinSelectDialog: User connected, fetching owned tokens...");
-            try {
-              const walletTokens = await getUserTokenBalances(publicKey.toBase58(), connection);
-              if (!isActive) return;
-              
-              console.log(`CoinSelectDialog: Received ${walletTokens.length} wallet tokens`);
-              
-              if (walletTokens.length > 0) {
-                console.log("CoinSelectDialog: User has tokens, using owned tokens list");
-                setCoinList(walletTokens);
-                setDisplayedTokens(walletTokens);
-              } else {
-                console.log("CoinSelectDialog: User has no tokens, fetching popular tokens");
-                const popularTokens = await getSolflareTokens(100);
-                if (!isActive) return;
-                
-                console.log(`CoinSelectDialog: Received ${popularTokens.length} popular tokens`);
-                setCoinList(popularTokens);
-                setDisplayedTokens(popularTokens);
-              }
-            } catch (balanceError) {
-              console.error("Error loading owned tokens:", balanceError);
-              if (!isActive) return;
-              
-              // Fallback to popular tokens
-              console.log("CoinSelectDialog: Error fetching owned tokens, falling back to popular tokens");
-              const popularTokens = await getSolflareTokens(100);
-              if (!isActive) return;
-              setCoinList(popularTokens);
-              setDisplayedTokens(popularTokens);
-            }
-          } else {
-            console.log("CoinSelectDialog: User not connected, fetching popular tokens");
-            const popularTokens = await getSolflareTokens(100);
-            if (!isActive) return;
-            
-            console.log(`CoinSelectDialog: Received ${popularTokens.length} popular tokens`);
-            setCoinList(popularTokens);
-            setDisplayedTokens(popularTokens);
-          }
-        } catch (error) {
-          console.error("Error loading Solflare tokens:", error);
-          if (!isActive) return;
-          
-          setErrorMessage(`Failed to load tokens: ${error instanceof Error ? error.message : "Unknown error"}`);
-          setErrorOpen(true);
-        } finally {
-          if (isActive) {
-            console.log("CoinSelectDialog: Finished token loading process");
-            setCoinListLoading(false);
-          }
-          
-          if (timeoutId) clearTimeout(timeoutId);
-        }
+        
+        // Use static token list
+        setCoinList(POPULAR_TOKENS);
+        setDisplayedTokens(POPULAR_TOKENS);
+        console.log("CoinSelectDialog: Set static token list");
+      } catch (error) {
+        console.error("Error initializing tokens:", error);
+        setErrorMessage(`Failed to load tokens: ${error instanceof Error ? error.message : "Unknown error"}`);
+        setErrorOpen(true);
+      } finally {
+        setCoinListLoading(false);
       }
     }
-    
-    loadSolflareTokens();
-    
-    // Cleanup function
-    return () => {
-      isActive = false;
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [open, connected, publicKey, setCoinList, setCoinListLoading, connection]);
+  }, [open, setCoinList, setCoinListLoading]);
 
   // Filter tokens based on search term
   useEffect(() => {
-    if (coinList.length === 0) {
-      console.log("CoinSelectDialog: coinList is empty, nothing to filter");
+    if (searchTerm.trim() === "") {
+      setDisplayedTokens(POPULAR_TOKENS);
       return;
     }
 
-    const performSearch = async () => {
-      if (searchTerm.trim() === "") {
-        setDisplayedTokens(coinList);
-        return;
-      }
-
-      // For short search terms (1-2 chars), just filter locally
-      if (searchTerm.length < 3) {
-        const filtered = coinList.filter(
-          (item) =>
-            item.symbol?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.mint.toString().toLowerCase() === searchTerm.toLowerCase()
-        );
-        setDisplayedTokens(filtered);
-      } else {
-        // For longer search terms, use the Solflare search API
-        try {
-          setCoinListLoading(true);
-          const searchResults = await searchSolflareTokens(searchTerm, 20);
-          setDisplayedTokens(searchResults);
-        } catch (error) {
-          console.error("Error searching tokens:", error);
-          // Fallback to local filtering
-          const filtered = coinList.filter(
-            (item) =>
-              item.symbol?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              item.mint.toString().toLowerCase() === searchTerm.toLowerCase()
-          );
-          setDisplayedTokens(filtered);
-        } finally {
-          setCoinListLoading(false);
-        }
-      }
-    };
-
-    const timeoutId = setTimeout(() => {
-      performSearch();
-    }, 300); // Debounce for better UX
-
-    return () => clearTimeout(timeoutId);
-  }, [searchTerm, coinList]);
+    // Simple local filtering
+    const filtered = POPULAR_TOKENS.filter(
+      (item) =>
+        item.symbol?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.mint.toString().toLowerCase() === searchTerm.toLowerCase()
+    );
+    setDisplayedTokens(filtered);
+  }, [searchTerm]);
 
   async function addNewCoinToListMaybe(mint: string) {
     // Validate mint address first
     try {
       // Check if the mint string is a valid Solana public key
       if (!mint || mint.trim() === "") {
-        setErrorMessage("Please enter a valid mint address");
+        setErrorMessage("Please enter a valid token mint address");
         setErrorOpen(true);
         return;
       }
+
+      setCoinListLoading(true);
       
-      // Check if token already exists in the list
-      const existingToken = coinList.find(
-        coin => coin.mint.toString() === mint
+      // Convert the input string to a PublicKey
+      let mintPubkey: PublicKey;
+      try {
+        mintPubkey = new PublicKey(mint.trim());
+      } catch (e) {
+        setErrorMessage("Invalid token mint address format");
+        setErrorOpen(true);
+        setCoinListLoading(false);
+        return;
+      }
+
+      // Check if token is already in the list
+      const existingToken = POPULAR_TOKENS.find(
+        (t) => t.mint.toString() === mintPubkey.toString()
       );
-      
+
       if (existingToken) {
+        // Token already exists, just select it
         setInputToken(existingToken);
         setModalOpen(false);
         setQuoting(true);
         return;
       }
-      
-      setCoinListLoading(true);
-      
-      // Fetch token using Solflare API
-      const payload = {
-        jsonrpc: "2.0",
-        id: "custom-token",
-        method: "getAsset",
-        params: {
-          id: mint
-        }
+
+      // For custom tokens, we can only use basic information
+      const customToken: CoinlistItem = {
+        mint: mintPubkey,
+        symbol: "Unknown",
+        name: "Custom Token",
+        decimals: 9, // Assume 9 decimals by default
+        logo: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png", // Default SOL logo
+        uiAmount: 0,
       };
 
-      const response = await fetch("https://token-list-api.solana.cloud/v1/list", {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        throw new Error(`Solflare API returned ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      
-      if (!data.result) {
-        throw new Error('Token not found');
-      }
-
-      const token = data.result;
-      
-      // Create new coin list item
-      const newToken: CoinlistItem = {
-        mint: new PublicKey(token.mint.address),
-        name: token.content?.metadata?.name || token.mint.address.slice(0, 8),
-        symbol: token.content?.metadata?.symbol || token.mint.address.slice(0, 4),
-        decimals: token.mint.decimals,
-        logo: token.content?.metadata?.image || 
-          'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
-        balance: token.ownership?.amount || 0,
-        uiAmount: (token.ownership?.amount || 0) / Math.pow(10, token.mint.decimals),
-      };
-      
-      // Add to token list
-      setCoinList([newToken, ...coinList]);
-      setInputToken(newToken);
+      // Add to list and select it
+      const newList = [...POPULAR_TOKENS, customToken];
+      setCoinList(newList);
+      setInputToken(customToken);
       setModalOpen(false);
       setQuoting(true);
     } catch (error) {
       console.error("Error adding custom token:", error);
-      setErrorMessage(`Failed to add token: ${error instanceof Error ? error.message : "Unknown error"}`);
+      setErrorMessage(`Error adding token: ${error instanceof Error ? error.message : "Unknown error"}`);
       setErrorOpen(true);
     } finally {
       setCoinListLoading(false);
     }
   }
 
+  const handleSelectCoin = (coin: CoinlistItem) => {
+    setInputToken(coin);
+    setModalOpen(false);
+    setQuoting(true);
+  };
+
+  const handleAddNewCoin = () => {
+    addNewCoinToListMaybe(addNewInput);
+  };
+
+  const handleClose = () => {
+    setModalOpen(false);
+  };
+
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(event.target.value);
+  };
+
+  const handleErrorClose = () => {
+    setErrorOpen(false);
+  };
+
   return (
     <>
-      <Dialog 
-        open={open} 
-        fullWidth
-        maxWidth="sm"
-        PaperProps={{
-          style: {
-            backgroundColor: 'rgba(10, 10, 10, 0.95)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: '16px',
-            border: '1px solid rgba(255, 193, 7, 0.2)',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-          }
-        }}
-      >
-        <DialogActions sx={{ bgcolor: "transparent" }}>
-        <IconButton
-          onClick={() => {
-            setModalOpen(false);
+      <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+        <DialogTitle
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            bgcolor: "rgba(10, 10, 10, 0.9)",
+            color: "white",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
           }}
-            sx={{ color: '#FFC107' }}
         >
-          <CloseIcon />
-        </IconButton>
-      </DialogActions>
-
-        <DialogContent sx={{ bgcolor: "transparent" }}>
-          <Typography sx={{ color: "#FFC107", fontWeight: 600, mb: 2 }}>
-            Select Token
-        </Typography>
-          <Paper
-            elevation={0}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              p: 1,
-              mb: 2,
-              backgroundColor: 'rgba(0, 0, 0, 0.5)',
-              borderRadius: 2,
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-            }}
+          <Typography variant="h6">Select Token</Typography>
+          <IconButton
+            edge="end"
+            color="inherit"
+            onClick={handleClose}
+            aria-label="close"
           >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent
+          sx={{
+            bgcolor: "rgba(10, 10, 10, 0.9)",
+            color: "white",
+            pb: 1,
+          }}
+        >
+          <Box sx={{ mt: 2, mb: 2 }}>
             <TextField
               fullWidth
-              variant="standard"
-              placeholder="Search token or paste address"
-              color="secondary"
+              placeholder="Search by name, symbol, or mint address"
+              variant="outlined"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={handleSearchChange}
               InputProps={{
-                disableUnderline: true,
-                style: { color: '#FFC107' },
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon sx={{ color: '#666' }} />
+                    <SearchIcon sx={{ color: "rgba(255, 255, 255, 0.7)" }} />
                   </InputAdornment>
                 ),
+                sx: {
+                  color: "white",
+                  bgcolor: "rgba(255, 255, 255, 0.05)",
+                  "& .MuiOutlinedInput-notchedOutline": {
+                    borderColor: "rgba(255, 255, 255, 0.2)",
+                  },
+                  "&:hover .MuiOutlinedInput-notchedOutline": {
+                    borderColor: "rgba(255, 255, 255, 0.3)",
+                  },
+                  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                    borderColor: "#FFC107",
+                  },
+                },
               }}
-              sx={{ backgroundColor: 'transparent' }}
             />
-            <Button
-              variant="contained"
-              color="secondary"
-              sx={{ ml: 1, px: 2 }}
-              onClick={() => addNewCoinToListMaybe(searchTerm)}
-            >
-              Add
-            </Button>
-          </Paper>
-          
-        {coinListLoading ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-              <CircularProgress color="secondary" sx={{ mb: 2 }} />
-              <Typography sx={{ color: '#FFC107', mb: 2 }}>
-                Loading tokens...
-              </Typography>
-              <Button 
-                variant="outlined" 
-                color="secondary" 
-                sx={{ mt: 2 }}
-                onClick={() => {
-                  // Force reload tokens
-                  setCoinListLoading(false);
-                  setTimeout(() => {
-                    setCoinListLoading(true);
-                  }, 100);
-                }}
-              >
-                Retry
-              </Button>
-            </Box>
-          ) : (
-            <List sx={{ width: "100%", bgcolor: "transparent", maxHeight: '60vh', overflow: 'auto' }}>
-              {displayedTokens.map((coin) => (
-                <ListItem 
-                  key={coin.mint.toBase58()}
-                  sx={{ 
-                    mb: 1, 
-                    borderRadius: 2,
-                    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                    '&:hover': {
-                      backgroundColor: 'rgba(255, 193, 7, 0.1)',
-                    },
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                <ListItemAvatar>
-                    <Avatar 
-                      src={coin.logo} 
-                      alt={coin.name}
-                      sx={{ border: '1px solid rgba(255, 193, 7, 0.3)' }}
-                    />
-                </ListItemAvatar>
-                <ListItemButton
-                  onClick={() => {
-                    setInputToken(coin);
-                    setModalOpen(false);
-                    setQuoting(true);
-                  }}
-                >
-                    <ListItemText 
-                      primary={coin.name} 
-                      primaryTypographyProps={{ fontWeight: 600, color: '#FFC107' }} 
-                      secondary={coin.symbol}
-                      secondaryTypographyProps={{ color: '#999' }}
-                    />
-                </ListItemButton>
-                <ListItemText
-                    primaryTypographyProps={{ textAlign: "right", color: '#FFFFFF', fontWeight: 500 }}
-                    primary={(coin.uiAmount || 0) + " " + (coin.symbol || "")}
-                />
-              </ListItem>
-            ))}
-              
-              {displayedTokens.length === 0 && !coinListLoading && (
-                <Box sx={{ textAlign: 'center', py: 4 }}>
-                  <Typography color="text.secondary" sx={{ mb: 2 }}>
-                    No tokens found. Try a different search term or add a custom token.
-                  </Typography>
-                  <Button 
-                    variant="contained" 
-                    color="secondary" 
-                    onClick={() => {
-                      // Try to load tokens again
-                      setCoinListLoading(true);
+          </Box>
+
+          <Paper
+            sx={{
+              maxHeight: 350,
+              overflow: "auto",
+              bgcolor: "transparent",
+              boxShadow: "none",
+              borderRadius: 2,
+              "& .MuiListItemButton-root:hover": {
+                bgcolor: "rgba(255, 255, 255, 0.05)",
+              },
+            }}
+          >
+            {coinListLoading ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                <CircularProgress sx={{ color: "#FFC107" }} />
+              </Box>
+            ) : displayedTokens.length > 0 ? (
+              <List sx={{ py: 0 }}>
+                {displayedTokens.map((coin) => (
+                  <ListItemButton
+                    key={coin.mint.toString()}
+                    onClick={() => handleSelectCoin(coin)}
+                    sx={{
+                      borderRadius: 1,
+                      my: 0.5,
                     }}
                   >
-                    Reload Token List
-                  </Button>
-                </Box>
-              )}
-          </List>
-        )}
-      </DialogContent>
-    </Dialog>
-      
-      <Snackbar 
-        open={errorOpen} 
-        autoHideDuration={6000} 
-        onClose={() => setErrorOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                    <ListItemAvatar>
+                      <Avatar
+                        alt={coin.symbol || "Token"}
+                        src={coin.logo}
+                        sx={{ bgcolor: "rgba(255, 255, 255, 0.1)" }}
+                        onError={(e: any) => {
+                          // Fall back to placeholder for broken images
+                          e.target.src = "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png";
+                        }}
+                      />
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={
+                        <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                          {coin.symbol || "Unknown"}
+                        </Typography>
+                      }
+                      secondary={
+                        <Typography
+                          variant="body2"
+                          sx={{ color: "rgba(255, 255, 255, 0.7)" }}
+                        >
+                          {coin.name} 
+                          {coin.uiAmount !== undefined && (
+                            <span style={{ marginLeft: 8 }}>
+                              {coin.uiAmount > 0 ? `(${coin.uiAmount})` : ""}
+                            </span>
+                          )}
+                        </Typography>
+                      }
+                    />
+                  </ListItemButton>
+                ))}
+              </List>
+            ) : (
+              <Box sx={{ textAlign: "center", py: 4 }}>
+                <Typography color="text.secondary">
+                  No tokens found. Add a custom token below.
+                </Typography>
+              </Box>
+            )}
+          </Paper>
+
+          <Box sx={{ mt: 2, mb: 1 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1, color: "rgba(255, 255, 255, 0.7)" }}>
+              Add Custom Token
+            </Typography>
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="Enter mint address"
+                value={addNewInput}
+                onChange={(e) => setAddNewInput(e.target.value)}
+                InputProps={{
+                  sx: {
+                    color: "white",
+                    bgcolor: "rgba(255, 255, 255, 0.05)",
+                    "& .MuiOutlinedInput-notchedOutline": {
+                      borderColor: "rgba(255, 255, 255, 0.2)",
+                    },
+                    "&:hover .MuiOutlinedInput-notchedOutline": {
+                      borderColor: "rgba(255, 255, 255, 0.3)",
+                    },
+                    "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                      borderColor: "#FFC107",
+                    },
+                  },
+                }}
+              />
+              <Button
+                variant="contained"
+                onClick={handleAddNewCoin}
+                disabled={coinListLoading || !addNewInput.trim()}
+                sx={{
+                  bgcolor: "#FFC107",
+                  color: "black",
+                  "&:hover": {
+                    bgcolor: "#e6af00",
+                  },
+                  "&:disabled": {
+                    bgcolor: "rgba(255, 193, 7, 0.3)",
+                    color: "rgba(0, 0, 0, 0.5)",
+                  },
+                }}
+              >
+                Add
+              </Button>
+            </Box>
+          </Box>
+        </DialogContent>
+      </Dialog>
+
+      <Snackbar
+        open={errorOpen}
+        autoHideDuration={6000}
+        onClose={handleErrorClose}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
-        <Alert 
-          onClose={() => setErrorOpen(false)} 
-          severity="error" 
-          sx={{ 
-            width: '100%', 
-            backgroundColor: 'rgba(0, 0, 0, 0.8)', 
-            border: '1px solid rgba(255, 0, 0, 0.3)',
-            color: '#FFF'
+        <Alert
+          onClose={handleErrorClose}
+          severity="error"
+          sx={{
+            width: "100%",
+            bgcolor: "rgba(211, 47, 47, 0.9)",
+            color: "white",
           }}
         >
           {errorMessage}
