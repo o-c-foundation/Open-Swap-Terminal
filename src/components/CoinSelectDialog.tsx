@@ -31,7 +31,7 @@ import { CoinlistItem, defaultList } from "@/types/CoinList";
 import { Connection, clusterApiUrl, PublicKey } from "@solana/web3.js";
 import { Metaplex } from "@metaplex-foundation/js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { getHeliusTokens, getUserTokenBalancesHelius } from "@/util/heliusTokens";
+import { getSolflareTokens, searchSolflareTokens, getUserTokenBalances } from "@/util/solflareTokens";
 import { privateConnection } from "@/util/privateRpc";
 
 interface CoinSelectDialogProps {
@@ -74,14 +74,14 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
   
   const { publicKey, connected } = useWallet();
 
-  // Load Helius DAS tokens when dialog opens
+  // Load Solflare tokens when dialog opens
   useEffect(() => {
     let isActive = true;
     let timeoutId: NodeJS.Timeout | null = null;
 
-    async function loadHeliusTokens() {
+    async function loadSolflareTokens() {
       if (open) {
-        console.log("CoinSelectDialog: Starting to load tokens from Helius DAS API...");
+        console.log("CoinSelectDialog: Starting to load tokens from Solflare API...");
         console.log(`CoinSelectDialog: Current coinListLoading state: ${coinListLoading}`);
         
         // Set a timeout to prevent the loading state from getting stuck
@@ -92,12 +92,12 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
             setErrorMessage("Token loading timed out. Please try again.");
             setErrorOpen(true);
           }
-        }, 15000); // 15 second timeout (slightly longer for DAS API)
+        }, 15000); // 15 second timeout
         
         try {
           // Force set loading to true
           setCoinListLoading(true);
-          console.log("CoinSelectDialog: Fetching tokens from Helius DAS API...");
+          console.log("CoinSelectDialog: Fetching tokens from Solflare API...");
           
           // First try with default tokens 
           if (coinList.length === 0) {
@@ -115,21 +115,20 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
           
           // Add debugging for network connectivity
           try {
-            const testResponse = await fetch('https://mainnet.helius-rpc.com', { 
-              method: 'POST', 
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ jsonrpc: '2.0', id: 'ping', method: 'ping' }) 
+            const testResponse = await fetch('https://token-list-api.solana.cloud/v1/list?limit=1', { 
+              method: 'GET', 
+              headers: { 'Content-Type': 'application/json' }
             });
-            console.log(`CoinSelectDialog: Network test to Helius API: ${testResponse.ok ? 'successful' : 'failed'} (${testResponse.status})`);
+            console.log(`CoinSelectDialog: Network test to Solflare API: ${testResponse.ok ? 'successful' : 'failed'} (${testResponse.status})`);
           } catch (networkError) {
             console.error("CoinSelectDialog: Network connectivity test failed:", networkError);
           }
           
-          // Fetch tokens from Helius DAS API
+          // Fetch tokens from Solflare API
           if (connected && publicKey) {
             console.log("CoinSelectDialog: User connected, fetching owned tokens...");
             try {
-              const walletTokens = await getUserTokenBalancesHelius(publicKey.toBase58());
+              const walletTokens = await getUserTokenBalances(publicKey.toBase58(), connection);
               if (!isActive) return;
               
               console.log(`CoinSelectDialog: Received ${walletTokens.length} wallet tokens`);
@@ -140,7 +139,7 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
                 setDisplayedTokens(walletTokens);
               } else {
                 console.log("CoinSelectDialog: User has no tokens, fetching popular tokens");
-                const popularTokens = await getHeliusTokens(100);
+                const popularTokens = await getSolflareTokens(100);
                 if (!isActive) return;
                 
                 console.log(`CoinSelectDialog: Received ${popularTokens.length} popular tokens`);
@@ -153,14 +152,14 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
               
               // Fallback to popular tokens
               console.log("CoinSelectDialog: Error fetching owned tokens, falling back to popular tokens");
-              const popularTokens = await getHeliusTokens(100);
+              const popularTokens = await getSolflareTokens(100);
               if (!isActive) return;
               setCoinList(popularTokens);
               setDisplayedTokens(popularTokens);
             }
           } else {
             console.log("CoinSelectDialog: User not connected, fetching popular tokens");
-            const popularTokens = await getHeliusTokens(100);
+            const popularTokens = await getSolflareTokens(100);
             if (!isActive) return;
             
             console.log(`CoinSelectDialog: Received ${popularTokens.length} popular tokens`);
@@ -168,7 +167,7 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
             setDisplayedTokens(popularTokens);
           }
         } catch (error) {
-          console.error("Error loading Helius DAS tokens:", error);
+          console.error("Error loading Solflare tokens:", error);
           if (!isActive) return;
           
           setErrorMessage(`Failed to load tokens: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -184,14 +183,14 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
       }
     }
     
-    loadHeliusTokens();
+    loadSolflareTokens();
     
     // Cleanup function
     return () => {
       isActive = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [open, connected, publicKey, setCoinList, setCoinListLoading]);
+  }, [open, connected, publicKey, setCoinList, setCoinListLoading, connection]);
 
   // Filter tokens based on search term
   useEffect(() => {
@@ -199,26 +198,49 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
       console.log("CoinSelectDialog: coinList is empty, nothing to filter");
       return;
     }
-    
-    console.log(`CoinSelectDialog: Filtering ${coinList.length} tokens with search term: "${searchTerm}"`);
-    
-    if (!searchTerm) {
-      setDisplayedTokens(coinList);
-      return;
-    }
-    
-    const lowerSearchTerm = searchTerm.toLowerCase();
-    const filtered = coinList.filter(coin => {
-      // Safe checks for all properties
-      const symbolMatch = coin.symbol ? coin.symbol.toLowerCase().includes(lowerSearchTerm) : false;
-      const nameMatch = coin.name ? coin.name.toLowerCase().includes(lowerSearchTerm) : false;
-      const mintMatch = coin.mint ? coin.mint.toString().toLowerCase() === lowerSearchTerm : false;
-      
-      return symbolMatch || nameMatch || mintMatch;
-    });
-    
-    console.log(`CoinSelectDialog: Filtered to ${filtered.length} tokens`);
-    setDisplayedTokens(filtered);
+
+    const performSearch = async () => {
+      if (searchTerm.trim() === "") {
+        setDisplayedTokens(coinList);
+        return;
+      }
+
+      // For short search terms (1-2 chars), just filter locally
+      if (searchTerm.length < 3) {
+        const filtered = coinList.filter(
+          (item) =>
+            item.symbol?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.mint.toString().toLowerCase() === searchTerm.toLowerCase()
+        );
+        setDisplayedTokens(filtered);
+      } else {
+        // For longer search terms, use the Solflare search API
+        try {
+          setCoinListLoading(true);
+          const searchResults = await searchSolflareTokens(searchTerm, 20);
+          setDisplayedTokens(searchResults);
+        } catch (error) {
+          console.error("Error searching tokens:", error);
+          // Fallback to local filtering
+          const filtered = coinList.filter(
+            (item) =>
+              item.symbol?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              item.mint.toString().toLowerCase() === searchTerm.toLowerCase()
+          );
+          setDisplayedTokens(filtered);
+        } finally {
+          setCoinListLoading(false);
+        }
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      performSearch();
+    }, 300); // Debounce for better UX
+
+    return () => clearTimeout(timeoutId);
   }, [searchTerm, coinList]);
 
   async function addNewCoinToListMaybe(mint: string) {
@@ -245,7 +267,7 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
       
       setCoinListLoading(true);
       
-      // Fetch token using Helius DAS API
+      // Fetch token using Solflare API
       const payload = {
         jsonrpc: "2.0",
         id: "custom-token",
@@ -255,7 +277,7 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
         }
       };
 
-      const response = await fetch("https://mainnet.helius-rpc.com", {
+      const response = await fetch("https://token-list-api.solana.cloud/v1/list", {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -264,7 +286,7 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
       });
 
       if (!response.ok) {
-        throw new Error(`Helius API returned ${response.status}: ${response.statusText}`);
+        throw new Error(`Solflare API returned ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();

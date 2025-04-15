@@ -1,7 +1,12 @@
 import { createJupiterApiClient } from "@jup-ag/api";
 import { Connection, PublicKey, VersionedTransaction } from "@solana/web3.js";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { CoinlistItem } from "@/types/CoinList";
+
+// Maximum number of retry attempts for API calls
+const MAX_RETRIES = 3;
+// Initial backoff duration in milliseconds (500ms)
+const INITIAL_BACKOFF_MS = 500;
 
 export default function useJupiterSwap(
   connection: Connection,
@@ -20,6 +25,39 @@ export default function useJupiterSwap(
   const [inputTokenAmount, setInputTokenAmount] = useState<any>(null);
   const [outputTokenAmount, setOutputTokenAmount] = useState<any>(null);
   const [latestError, setLatestError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  // Use ref to track the last request to prevent race conditions
+  const lastRequestTimeRef = useRef<number>(0);
+  const lastRequestParamsRef = useRef<string>("");
+  const requestInProgressRef = useRef<boolean>(false);
+
+  // Helper function to implement exponential backoff retry logic
+  const fetchWithRetry = async (apiCall: () => Promise<any>, retryAttempt = 0): Promise<any> => {
+    try {
+      return await apiCall();
+    } catch (error: any) {
+      // Check if it's a rate limit error (429)
+      const isRateLimitError = error.message?.includes('429') || 
+                               error.statusCode === 429 || 
+                               error.status === 429;
+      
+      // If we've hit max retries or it's not a rate limit error, throw
+      if (retryAttempt >= MAX_RETRIES || !isRateLimitError) {
+        throw error;
+      }
+      
+      // Calculate backoff time with exponential increase
+      const backoffTime = INITIAL_BACKOFF_MS * Math.pow(2, retryAttempt);
+      console.log(`useJupiterSwap: Rate limit hit, retrying in ${backoffTime}ms (attempt ${retryAttempt + 1} of ${MAX_RETRIES})`);
+      
+      // Wait for backoff period
+      await new Promise(resolve => setTimeout(resolve, backoffTime));
+      
+      // Retry with incremented retry count
+      return fetchWithRetry(apiCall, retryAttempt + 1);
+    }
+  };
 
   useEffect(() => {
     async function getQuote() {
@@ -36,18 +74,8 @@ export default function useJupiterSwap(
       }
 
       try {
-        console.log("useJupiterSwap: Starting quote fetch...", {
-          inputMint: inputToken.mint.toBase58(),
-          outputMint: outputToken.mint.toBase58(),
-          amount: Number(inputAmount) * Math.pow(10, inputToken.decimals),
-          slippage: Math.round(Number(slippage) * 100)
-        });
-        
-        setQuoting(true);
-        setLatestError(null);
+        // Prepare request parameters
         const amountLamports = Number(inputAmount) * Math.pow(10, inputToken.decimals);
-        
-        // Log the request parameters for API debugging
         const requestParams = {
           inputMint: inputToken.mint.toBase58(),
           outputMint: outputToken.mint.toBase58(),
@@ -56,21 +84,60 @@ export default function useJupiterSwap(
           onlyDirectRoutes: false,
           asLegacyTransaction: false,
         };
-        console.log("useJupiterSwap: API Request parameters:", requestParams);
-        
-        const quoteResponse = await jupiterApiClient.quoteGet({
+
+        // Convert params to a string for comparison
+        const paramsString = JSON.stringify(requestParams);
+
+        // Check if this is a duplicate of the last request within 1 second
+        const now = Date.now();
+        if (
+          paramsString === lastRequestParamsRef.current &&
+          now - lastRequestTimeRef.current < 1000
+        ) {
+          console.log("useJupiterSwap: Skipping duplicate request within 1 second");
+          return;
+        }
+
+        // Don't run if another request is in progress
+        if (requestInProgressRef.current) {
+          console.log("useJupiterSwap: Request already in progress, skipping");
+          return;
+        }
+
+        // Update request tracking refs
+        lastRequestTimeRef.current = now;
+        lastRequestParamsRef.current = paramsString;
+        requestInProgressRef.current = true;
+
+        console.log("useJupiterSwap: Starting quote fetch...", {
           inputMint: inputToken.mint.toBase58(),
           outputMint: outputToken.mint.toBase58(),
-          amount: amountLamports.toString() as any,
-          slippageBps: Math.round(Number(slippage) * 100) as any,
-          onlyDirectRoutes: false,
-          asLegacyTransaction: false,
+          amount: amountLamports,
+          slippage: Math.round(Number(slippage) * 100)
         });
+        
+        setQuoting(true);
+        setLatestError(null);
+        
+        // Log the request parameters for API debugging
+        console.log("useJupiterSwap: API Request parameters:", requestParams);
+        
+        // Use the fetchWithRetry wrapper for the API call
+        const quoteResponse = await fetchWithRetry(() => 
+          jupiterApiClient.quoteGet({
+            inputMint: inputToken.mint.toBase58(),
+            outputMint: outputToken.mint.toBase58(),
+            amount: amountLamports.toString() as any,
+            slippageBps: Math.round(Number(slippage) * 100) as any,
+            onlyDirectRoutes: false,
+            asLegacyTransaction: false,
+          })
+        );
 
         if (quoteResponse) {
           console.log("useJupiterSwap: Quote received successfully", {
             outAmount: quoteResponse.outAmount,
-            routes: quoteResponse.routePlan?.length || 0
+            routes: quoteResponse.routesInfos?.length || quoteResponse.routePlan?.length || 0
           });
           
           // Log more details of the quote response for debugging
@@ -87,6 +154,8 @@ export default function useJupiterSwap(
           setInputTokenAmount(amountLamports);
           setOutputTokenAmount(outAmount);
           setTransaction(quoteResponse);
+          // Reset retry count on success
+          setRetryCount(0);
         } else {
           console.warn("useJupiterSwap: Empty quote response received");
           setQuote("0");
@@ -96,13 +165,17 @@ export default function useJupiterSwap(
         console.error("Error getting Jupiter quote:", error);
         if (error instanceof Error) {
           console.error("Error details:", error.message, error.stack);
-          setLatestError(`Jupiter API error: ${error.message}`);
+          const errorMessage = error.message.includes('429') 
+            ? "Rate limit exceeded. Please try again in a moment." 
+            : `Jupiter API error: ${error.message}`;
+          setLatestError(errorMessage);
         } else {
           setLatestError("Unknown error occurred while fetching quote");
         }
         setQuote("0");
       } finally {
         setQuoting(false);
+        requestInProgressRef.current = false;
         console.log("useJupiterSwap: Quote fetch completed", { success: quote !== "0", error: latestError });
       }
     }
@@ -110,7 +183,7 @@ export default function useJupiterSwap(
     if (quoting) {
       getQuote();
     }
-  }, [inputToken, outputToken, inputAmount, slippage, quoting, jupiterApiClient, latestError]);
+  }, [inputToken, outputToken, inputAmount, slippage, quoting, jupiterApiClient]);
 
   async function executeSwap(signTransaction: any, sendTransaction: any) {
     if (!wallet || !transaction || !inputToken || !outputToken) {
@@ -121,7 +194,7 @@ export default function useJupiterSwap(
         outputToken: !!outputToken
       });
       setLatestError("Missing required parameters for swap execution");
-      return false;
+      return { success: false };
     }
     
     try {
@@ -134,14 +207,17 @@ export default function useJupiterSwap(
         quoteResponseAvailable: !!transaction
       });
       
-      const swapResponse = await jupiterApiClient.swapPost({
-        swapRequest: {
-          quoteResponse: transaction,
-          userPublicKey: wallet.toBase58(),
-          dynamicComputeUnitLimit: true,
-          prioritizationFeeLamports: "auto" as any,
-        },
-      });
+      // Use fetchWithRetry for swap request too
+      const swapResponse = await fetchWithRetry(() => 
+        jupiterApiClient.swapPost({
+          swapRequest: {
+            quoteResponse: transaction,
+            userPublicKey: wallet.toBase58(),
+            dynamicComputeUnitLimit: true,
+            prioritizationFeeLamports: "auto" as any,
+          },
+        })
+      );
       
       if (swapResponse?.swapTransaction) {
         console.log("useJupiterSwap: Swap transaction generated successfully");
@@ -156,22 +232,25 @@ export default function useJupiterSwap(
             skipPreflight: true,
           });
           console.log("useJupiterSwap: Transaction sent successfully:", txid);
-          return txid;
+          return { success: true, txid };
         }
       } else {
         console.error("useJupiterSwap: No swap transaction returned from API");
         setLatestError("Failed to generate swap transaction");
       }
-      return false;
+      return { success: false };
     } catch (error) {
       console.error("Error executing Jupiter swap:", error);
       if (error instanceof Error) {
         console.error("Swap execution error details:", error.message, error.stack);
-        setLatestError(`Swap execution error: ${error.message}`);
+        const errorMessage = error.message.includes('429') 
+          ? "Rate limit exceeded. Please try again in a moment." 
+          : `Swap execution error: ${error.message}`;
+        setLatestError(errorMessage);
       } else {
         setLatestError("Unknown error occurred during swap execution");
       }
-      return false;
+      return { success: false };
     } finally {
       setSwapping(false);
     }
@@ -184,8 +263,10 @@ export default function useJupiterSwap(
     swapping,
     setSwapping,
     executeSwap,
+    swap: executeSwap, // Alias for backward compatibility
     inputTokenAmount,
     outputTokenAmount,
-    latestError // Expose the latest error for UI display
+    latestError, // Expose the latest error for UI display
+    retryCount
   };
 }
