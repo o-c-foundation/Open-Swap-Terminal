@@ -2,8 +2,8 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { CoinlistItem } from "@/types/CoinList";
 
 // Helius API endpoint
-const HELIUS_RPC_URL = "https://mainnet.helius-rpc.com";
-const HELIUS_API_KEY = "YOUR_API_KEY"; // You might want to store this in an env variable
+const HELIUS_RPC_URL = "https://mainnet.helius-rpc.com/?api-key=405da4aa-d376-44ce-87eb-8328fb80b562";
+const HELIUS_API_KEY = "405da4aa-d376-44ce-87eb-8328fb80b562"; // User's actual API key
 
 // Interface for the DAS API response
 interface Asset {
