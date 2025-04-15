@@ -82,6 +82,7 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
     async function loadHeliusTokens() {
       if (open) {
         console.log("CoinSelectDialog: Starting to load tokens from Helius DAS API...");
+        console.log(`CoinSelectDialog: Current coinListLoading state: ${coinListLoading}`);
         
         // Set a timeout to prevent the loading state from getting stuck
         timeoutId = setTimeout(() => {
@@ -94,8 +95,35 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
         }, 15000); // 15 second timeout (slightly longer for DAS API)
         
         try {
+          // Force set loading to true
           setCoinListLoading(true);
           console.log("CoinSelectDialog: Fetching tokens from Helius DAS API...");
+          
+          // First try with default tokens 
+          if (coinList.length === 0) {
+            setCoinList([{
+              mint: new PublicKey("So11111111111111111111111111111111111111112"),
+              name: "Solana",
+              symbol: "SOL",
+              decimals: 9,
+              logo: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
+              balance: 0,
+              uiAmount: 0
+            }]);
+            console.log("CoinSelectDialog: Set default SOL token while fetching");
+          }
+          
+          // Add debugging for network connectivity
+          try {
+            const testResponse = await fetch('https://mainnet.helius-rpc.com', { 
+              method: 'POST', 
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ jsonrpc: '2.0', id: 'ping', method: 'ping' }) 
+            });
+            console.log(`CoinSelectDialog: Network test to Helius API: ${testResponse.ok ? 'successful' : 'failed'} (${testResponse.status})`);
+          } catch (networkError) {
+            console.error("CoinSelectDialog: Network connectivity test failed:", networkError);
+          }
           
           // Fetch tokens from Helius DAS API
           if (connected && publicKey) {
@@ -104,14 +132,20 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
               const walletTokens = await getUserTokenBalancesHelius(publicKey.toBase58());
               if (!isActive) return;
               
+              console.log(`CoinSelectDialog: Received ${walletTokens.length} wallet tokens`);
+              
               if (walletTokens.length > 0) {
                 console.log("CoinSelectDialog: User has tokens, using owned tokens list");
                 setCoinList(walletTokens);
+                setDisplayedTokens(walletTokens);
               } else {
                 console.log("CoinSelectDialog: User has no tokens, fetching popular tokens");
                 const popularTokens = await getHeliusTokens(100);
                 if (!isActive) return;
+                
+                console.log(`CoinSelectDialog: Received ${popularTokens.length} popular tokens`);
                 setCoinList(popularTokens);
+                setDisplayedTokens(popularTokens);
               }
             } catch (balanceError) {
               console.error("Error loading owned tokens:", balanceError);
@@ -122,12 +156,16 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
               const popularTokens = await getHeliusTokens(100);
               if (!isActive) return;
               setCoinList(popularTokens);
+              setDisplayedTokens(popularTokens);
             }
           } else {
             console.log("CoinSelectDialog: User not connected, fetching popular tokens");
             const popularTokens = await getHeliusTokens(100);
             if (!isActive) return;
+            
+            console.log(`CoinSelectDialog: Received ${popularTokens.length} popular tokens`);
             setCoinList(popularTokens);
+            setDisplayedTokens(popularTokens);
           }
         } catch (error) {
           console.error("Error loading Helius DAS tokens:", error);

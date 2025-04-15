@@ -92,22 +92,32 @@ export async function getHeliusTokens(topTokenCount = 50): Promise<CoinlistItem[
       }
     };
 
+    console.log("getHeliusTokens: Sending API request with payload:", JSON.stringify(payload));
+    
+    // Add timeout to the fetch operation
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
     const response = await fetch(HELIUS_RPC_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': HELIUS_API_KEY
       },
-      body: JSON.stringify(payload)
-    });
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    }).finally(() => clearTimeout(timeoutId));
 
     if (!response.ok) {
+      console.error(`getHeliusTokens: API error ${response.status}: ${response.statusText}`);
       throw new Error(`Helius API returned ${response.status}: ${response.statusText}`);
     }
 
     const data = await response.json();
+    console.log("getHeliusTokens: Received response with status:", response.status);
     
     if (!data.result || !data.result.items) {
+      console.error("getHeliusTokens: Invalid response format:", JSON.stringify(data).substring(0, 200) + "...");
       throw new Error('Invalid response format from Helius API');
     }
 
