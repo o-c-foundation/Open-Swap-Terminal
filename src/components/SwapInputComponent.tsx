@@ -12,7 +12,7 @@ import {
 import SolanaLogo from "./Solana-Logo.png";
 import React from "react";
 import { CoinlistItem } from "@/types/CoinList";
-import { DebouncedState } from "use-debounce";
+import { useDebounce } from "use-debounce";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import theme from "@/theme";
 

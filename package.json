@@ -24,8 +24,10 @@
     "@solana/wallet-adapter-wallets": "^0.19.32",
     "@solana/web3.js": "^1.91.1",
     "next": "latest",
+    "pino-pretty": "^13.0.0",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "use-debounce": "^10.0.4"
   },
   "devDependencies": {
     "@types/node": "latest",
