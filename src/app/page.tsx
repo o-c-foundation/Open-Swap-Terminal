@@ -6,23 +6,11 @@ import Box from "@mui/material/Box";
 import { CircularProgress } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import { useEffect, useState } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
 import SwapComponentCard from "@/components/SwapComponentCard";
-
 import DappBar from "@/components/DappBar";
-import {
-  ConnectionProvider,
-  WalletProvider,
-} from "@solana/wallet-adapter-react";
-import {
-  PhantomWalletAdapter,
-  SolflareWalletAdapter,
-} from "@solana/wallet-adapter-wallets";
-import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import "./global.css";
 
 export default function Home() {
-  const { connected } = useWallet();
   const [loading, setLoading] = useState(true);
   
   // Simulate initial loading

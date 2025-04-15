@@ -1,23 +1,7 @@
 import { AppBar, Toolbar, Typography, Box } from "@mui/material";
-import dynamic from "next/dynamic";
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
-import { useRPC } from "@/util/RPCContext";
-require("@solana/wallet-adapter-react-ui/styles.css");
-
-const WalletDisconnectButtonDynamic = dynamic(
-  async () =>
-    (await import("@solana/wallet-adapter-react-ui")).WalletDisconnectButton,
-  { ssr: false }
-);
-const WalletMultiButtonDynamic = dynamic(
-  async () =>
-    (await import("@solana/wallet-adapter-react-ui")).WalletMultiButton,
-  { ssr: false }
-);
 
 export default function DappBar() {
-  const { rpcConfig } = useRPC();
-
   return (
     <AppBar 
       position="static" 
@@ -49,8 +33,7 @@ export default function DappBar() {
           </Typography>
         </Box>
         
-        <WalletMultiButtonDynamic />
-        <WalletDisconnectButtonDynamic />
+        {/* Jupiter Terminal will handle wallet connection */}
       </Toolbar>
     </AppBar>
   );

@@ -2,10 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Box, Container, Typography, Paper, Skeleton, Select, MenuItem, TextField, Button, FormControl, InputLabel, Grid, CircularProgress } from "@mui/material";
 import DappBar from "@/components/DappBar";
-import { PublicKey } from "@solana/web3.js";
-import { useWallet } from "@solana/wallet-adapter-react";
 import { CoinlistItem } from "@/types/CoinList";
-import { useRPC } from "@/util/RPCContext";
 import NextLink from "next/link";
 import dynamic from 'next/dynamic';
 
@@ -14,10 +11,10 @@ const TradingViewChart = dynamic(() => import('../../components/TradingViewChart
   loading: () => <div style={{ height: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress /></div>,
 });
 
-// Static list of popular tokens
-const POPULAR_TOKENS: CoinlistItem[] = [
+// Static list of popular tokens with simplified data structure
+const POPULAR_TOKENS = [
   {
-    mint: new PublicKey("So11111111111111111111111111111111111111112"),
+    mint: "So11111111111111111111111111111111111111112",
     symbol: "SOL",
     name: "Solana",
     decimals: 9,
@@ -25,7 +22,7 @@ const POPULAR_TOKENS: CoinlistItem[] = [
     uiAmount: 0,
   },
   {
-    mint: new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
+    mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
     symbol: "USDC",
     name: "USD Coin",
     decimals: 6,
@@ -33,7 +30,7 @@ const POPULAR_TOKENS: CoinlistItem[] = [
     uiAmount: 0,
   },
   {
-    mint: new PublicKey("DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"),
+    mint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
     symbol: "BONK",
     name: "Bonk",
     decimals: 5,
@@ -41,7 +38,7 @@ const POPULAR_TOKENS: CoinlistItem[] = [
     uiAmount: 0,
   },
   {
-    mint: new PublicKey("7i5KKsX2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfRx"),
+    mint: "7i5KKsX2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfRx",
     symbol: "GMT",
     name: "STEPN",
     decimals: 9,
@@ -49,7 +46,7 @@ const POPULAR_TOKENS: CoinlistItem[] = [
     uiAmount: 0,
   },
   {
-    mint: new PublicKey("mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So"),
+    mint: "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
     symbol: "mSOL",
     name: "Marinade staked SOL",
     decimals: 9,
@@ -57,7 +54,7 @@ const POPULAR_TOKENS: CoinlistItem[] = [
     uiAmount: 0,
   },
   {
-    mint: new PublicKey("7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs"),
+    mint: "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs",
     symbol: "JUP",
     name: "Jupiter",
     decimals: 8,
@@ -67,9 +64,7 @@ const POPULAR_TOKENS: CoinlistItem[] = [
 ];
 
 export default function ChartsPage() {
-  const { connected, publicKey } = useWallet();
-  const { rpcConfig } = useRPC();
-  const [selectedToken, setSelectedToken] = useState<CoinlistItem | null>(null);
+  const [selectedToken, setSelectedToken] = useState<(typeof POPULAR_TOKENS)[0] | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Initialize with popular tokens
@@ -88,7 +83,7 @@ export default function ChartsPage() {
 
   const handleTokenChange = (event: any) => {
     const selectedMint = event.target.value;
-    const token = POPULAR_TOKENS.find(t => t.mint.toString() === selectedMint);
+    const token = POPULAR_TOKENS.find(t => t.mint === selectedMint);
     if (token) {
       setSelectedToken(token);
     }
@@ -187,13 +182,13 @@ export default function ChartsPage() {
               <Select
                 labelId="token-select-label"
                 id="token-select"
-                value={selectedToken?.mint.toString() || ''}
+                value={selectedToken?.mint || ''}
                 onChange={handleTokenChange}
                 label="Token"
                 disabled={loading}
               >
                 {POPULAR_TOKENS.map((token) => (
-                  <MenuItem key={token.mint.toString()} value={token.mint.toString()}>
+                  <MenuItem key={token.mint} value={token.mint}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       {token.logo && (
                         <img 
@@ -217,7 +212,7 @@ export default function ChartsPage() {
           {selectedToken ? (
             <TradingViewChart 
               symbol={selectedToken.symbol || selectedToken.name} 
-              mint={selectedToken.mint.toString()}
+              mint={selectedToken.mint}
             />
           ) : (
             <Box sx={{ 

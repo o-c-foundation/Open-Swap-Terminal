@@ -3,14 +3,9 @@
 import { Card, Typography, Box } from "@mui/material";
 import SwapVertIcon from '@mui/icons-material/SwapVert';
 import React, { useEffect } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
-import { useConnection } from "@solana/wallet-adapter-react";
 
-// This new component will use Jupiter Terminal in integrated mode
+// This component uses Jupiter Terminal in integrated mode
 export default function SwapComponentCard() {
-  const { connection } = useConnection();
-  const wallet = useWallet();
-
   useEffect(() => {
     // Add the Jupiter Terminal script to the document
     const script = document.createElement('script');
@@ -36,22 +31,13 @@ export default function SwapComponentCard() {
     };
   }, []);
 
-  // Function to sync wallet state with Jupiter Terminal
-  useEffect(() => {
-    if (window.Jupiter && window.Jupiter.syncProps && wallet) {
-      window.Jupiter.syncProps({ 
-        passthroughWalletContextState: wallet 
-      });
-    }
-  }, [wallet, wallet.connected]);
-
   // Initialize Jupiter Terminal
   const initJupiterTerminal = () => {
     window.Jupiter.init({
       displayMode: "integrated",
       integratedTargetId: "jupiter-swap-container",
-      endpoint: connection.rpcEndpoint,
-      enableWalletPassthrough: true, // Use wallet adapter from your app
+      // Use default Jupiter RPC endpoint
+      strictTokenList: false,
       containerStyles: {
         width: '100%',
         height: '100%',
@@ -136,7 +122,7 @@ declare global {
       init: (config: {
         displayMode?: 'integrated' | 'modal' | 'widget';
         integratedTargetId?: string;
-        endpoint: string;
+        endpoint?: string;
         enableWalletPassthrough?: boolean;
         containerStyles?: React.CSSProperties;
         containerClassName?: string;
@@ -153,7 +139,7 @@ declare global {
         defaultExplorer?: 'Solana Explorer' | 'Solscan' | 'Solana Beach' | 'SolanaFM';
       }) => void;
       close: () => void;
-      syncProps: (props: { passthroughWalletContextState: any }) => void;
+      syncProps?: (props: any) => void;
     };
   }
 }
