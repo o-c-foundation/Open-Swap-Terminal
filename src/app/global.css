@@ -1,13 +1,80 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap");
+
+/* Animated background */
+:root {
+  --bg-color1: #000000;
+  --bg-color2: #111111;
+  --bg-color3: #1a1a1a;
+  --accent-color: #FFC107;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background: linear-gradient(
+    -45deg,
+    var(--bg-color1),
+    var(--bg-color2),
+    var(--bg-color3),
+    #050505
+  );
+  background-size: 400% 400%;
+  animation: gradient 15s ease infinite;
+  position: relative;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.8) 100%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-color1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--accent-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #e0aa00;
+}
+
+/* Wallet adapter styling */
 .wallet-adapter-button {
   background-color: transparent;
-  border: none;
-  color: hwb(0 55% 45%);
+  border: 1px solid var(--accent-color);
+  color: var(--accent-color);
   cursor: pointer;
   display: flex;
   align-items: center;
-  font-family: "DM Sans", "Roboto", "Helvetica Neue", Helvetica, Arial,
-    sans-serif;
+  font-family: "Quantico", "DM Sans", "Roboto", sans-serif;
   font-size: 16px;
   font-weight: 600;
   height: 48px;
@@ -15,12 +82,13 @@
   padding: 0 24px;
   border-radius: 4px;
   margin-right: 7px;
-  box-shadow: 0px 3px 1px -2px rgba(0, 0, 0, 0.2),
-    0px 2px 2px 0px rgba(0, 0, 0, 0.14), 0px 1px 5px 0px rgba(0, 0, 0, 0.12);
+  transition: all 0.2s ease;
+  box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.16);
 }
 
 .wallet-adapter-button-trigger {
-  background-color: #c6ccd8;
+  background-color: var(--accent-color);
+  color: black;
 }
 
 .wallet-adapter-button:not([disabled]):focus-visible {
@@ -28,12 +96,16 @@
 }
 
 .wallet-adapter-button:not([disabled]):hover {
-  background-color: #c3c4c8;
+  background-color: var(--accent-color);
+  color: black;
+  transform: translateY(-2px);
+  box-shadow: 0px 6px 10px rgba(0, 0, 0, 0.25);
 }
 
 .wallet-adapter-button[disabled] {
-  background: #404144;
-  color: #fcfcfc;
+  background: #222222;
+  color: #666666;
+  border-color: #333333;
   cursor: not-allowed;
 }
 
@@ -299,24 +371,7 @@
   border-radius: 8px;
   color: #fff;
 }
-::-webkit-scrollbar {
-  width: 10px;
-}
 
-/* Track */
-::-webkit-scrollbar-track {
-  background: rgba(27, 38, 45, 1);
-}
-
-/* Handle */
-::-webkit-scrollbar-thumb {
-  background: rgba(138, 201, 228, 1);
-}
-
-/* Handle on hover */
-::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
 .mui-ume8vi-MuiInputBase-input-MuiInput-input.Mui-disabled {
   color: rgba(255, 255, 255, 0.5) !important;
   -webkit-text-fill-color: #10141f;

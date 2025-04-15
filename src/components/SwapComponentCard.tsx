@@ -1,17 +1,15 @@
 //parent component for swaps, to be used with wallet context and useWallet()
 
-import { Card, Button, Typography } from "@mui/material";
+import { Card, Button, Typography, Box } from "@mui/material";
 import SwapInputComponent from "./SwapInputComponent";
 import { CoinlistItem } from "@/types/CoinList";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import React, { useCallback, useEffect, useMemo } from "react";
-import { Wallet } from "@project-serum/anchor";
-import { VersionedTransaction } from "@solana/web3.js";
-import useRaydiumQuote from "@/hooks/useRaydiumQuote";
-import { connected } from "process";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { privateConnection } from "@/util/privateRpc";
-import useRaydiumSwap from "@/hooks/useRaydiumSwap";
 import { useDebouncedCallback } from "use-debounce";
+import SwapVertIcon from '@mui/icons-material/SwapVert';
+import SlippageSelector from "./SlippageSelector";
+import PercentageButtons from "./PercentageButtons";
 
 interface SwapComponentCardProps {
   direction: "up" | "down";
@@ -26,7 +24,7 @@ interface SwapComponentCardProps {
   outputAmount: string;
   setOutputAmount: React.Dispatch<React.SetStateAction<string>>;
   swapping: boolean;
-  setSwapping: React.Dispatch<React.SetStateAction<boolean>>;
+  setSwapping: (() => Promise<void>) | React.Dispatch<React.SetStateAction<boolean>>;
   quotebag: any;
 }
 
@@ -44,6 +42,8 @@ export default function SwapComponentCard(props: SwapComponentCardProps) {
     outputAmount,
     setOutputAmount,
     quotebag,
+    swapping,
+    setSwapping,
   } = props;
 
   const {
@@ -52,109 +52,104 @@ export default function SwapComponentCard(props: SwapComponentCardProps) {
     wallet,
     publicKey,
     connected,
-    sendTransaction,
-    signTransaction,
   } = useWallet();
 
-  const { connection } = useConnection();
+  const [slippage, setSlippage] = useState<number>(0.5); // Default 0.5%
+
   const debounced = useDebouncedCallback(() => {
     console.log("debounced called");
     quotebag.setQuoting(true);
-  }, 1000);
-  // const performSwap = useEffect(() => {
-  //   if (!wallet) {
-  //     alert("connect wallet first");
-  //     setSwapping(false);
-  //     return;
-  //   }
-  //   console.log("in performSwap");
+  }, 800);
 
-  //   async function swapFFI() {
-  //     console.log("dec:", inputToken.decimals);
-  //     console.log("in:", inputAmount);
-  //     const amountLamports = Number(inputAmount) * 10 ** inputToken.decimals;
-  //     console.log(amountLamports);
-  //     const quoteResponse = await (
-  //       await fetch(
-  //         `https://quote-api.jup.ag/v6/quote?inputMint=${inputToken.mint.toString()}&outputMint=${outputToken.mint.toString()}&amount=${amountLamports}&slippageBps=5000`
-  //       )
-  //     ).json();
-  //     console.log(quoteResponse);
-  //     const { swapTransaction } = await (
-  //       await fetch("https://quote-api.jup.ag/v6/swap", {
-  //         method: "POST",
-  //         headers: {
-  //           "Content-Type": "application/json",
-  //         },
-  //         body: JSON.stringify({
-  //           // quoteResponse from /quote api
-  //           quoteResponse,
-  //           // user public key to be used for the swap
-  //           userPublicKey: publicKey!.toString(),
+  // Swap token positions handler
+  const handleSwapPositions = useCallback(() => {
+    const tempToken = inputToken;
+    setInputToken(outputToken);
+    setOutputToken(tempToken);
+    quotebag.setQuoting(true);
+  }, [inputToken, outputToken, setInputToken, setOutputToken, quotebag]);
 
-  //           // auto wrap and unwrap SOL. default is true
-  //           wrapAndUnwrapSol: true,
-  //           legacyTransactions: false,
-  //           // feeAccount is optional. Use if you want to charge a fee.  feeBps must have been passed in /quote API.
-  //           // feeAccount: "fee_account_public_key"
-  //         }),
-  //       })
-  //     ).json();
-  //     console.log(swapTransaction);
-  //     const swapTransactionBuf = Buffer.from(swapTransaction, "base64");
-  //     var transaction = VersionedTransaction.deserialize(swapTransactionBuf);
-  //     if (signTransaction) {
-  //       var signed = await signTransaction(transaction);
-  //       await sendTransaction(signed, connection, {
-  //         skipPreflight: true,
-  //       });
-  //     }
-  //   }
-
-  //   if (wallet && swapping && publicKey) {
-  //     console.log("wallet and swapping");
-  //     //fetch quote
-  //     swapFFI();
-
-  //     setSwapping(false);
-  //   }
-  // }, [swapping]);
-
-  const { swapping, setSwapping } = useRaydiumSwap(
-    privateConnection,
-    publicKey!,
-    quotebag.inputTokenAmount,
-    quotebag.outputTokenAmount,
-
-    quotebag.poolKeys
-  );
-  // React.useEffect(() => {
-  //   setQuoting(true);
-  // }, [inputAmount]);
-  React.useEffect(() => {
-    if (wallet && swapping && publicKey) {
-      console.log("wallet and swapping");
-      //fetch quote
-      setSwapping(false);
+  // Execute swap handler
+  const handleSwap = useCallback(() => {
+    if (!connected) {
+      alert("Please connect your wallet first");
+      return;
     }
-  }, [inputAmount, swapping]);
+    
+    if (typeof setSwapping === 'function') {
+      (setSwapping as () => Promise<void>)();
+    } else {
+      (setSwapping as React.Dispatch<React.SetStateAction<boolean>>)(true);
+    }
+  }, [connected, setSwapping]);
 
-  console.log(wallet, swapping, publicKey);
+  // Calculate max amount that can be swapped
+  const maxInputAmount = useMemo(() => {
+    if (!inputToken || !inputToken.uiAmount) return 0;
+    return inputToken.uiAmount;
+  }, [inputToken]);
+
+  // Handle percentage button click
+  const handlePercentageClick = useCallback((percentage: number) => {
+    if (maxInputAmount > 0) {
+      const amount = (maxInputAmount * percentage / 100).toFixed(
+        // Use 6 decimal places for larger amounts, more for smaller amounts
+        maxInputAmount > 1 ? 6 : 9
+      );
+      setInputAmount(amount);
+      quotebag.setQuoting(true);
+    }
+  }, [maxInputAmount, setInputAmount, quotebag]);
 
   return (
     <Card
       sx={{
         my: 5,
-        borderRadius: 4,
+        borderRadius: 16,
         p: 5,
+        background: 'rgba(0, 0, 0, 0.6)',
+        backdropFilter: 'blur(10px)',
         borderWidth: 1,
-        borderColor: "rgba(138,201,228,0.2)",
+        borderColor: "rgba(255, 193, 7, 0.3)",
         borderStyle: "solid",
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+        position: 'relative',
+        overflow: 'visible',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: -2,
+          left: -2,
+          right: -2,
+          bottom: -2,
+          background: 'linear-gradient(45deg, rgba(255, 193, 7, 0.1), transparent, rgba(255, 193, 7, 0.3), transparent)',
+          borderRadius: 18,
+          zIndex: -1,
+          animation: 'rotate 6s linear infinite',
+        },
+        '@keyframes rotate': {
+          '0%': {
+            filter: 'hue-rotate(0deg)',
+          },
+          '100%': {
+            filter: 'hue-rotate(360deg)',
+          },
+        },
       }}
     >
-      <Typography variant="h4" color="white" style={{ paddingBottom: 10 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <SwapVertIcon sx={{ color: '#FFC107', mr: 2, fontSize: 30 }} />
+          <Typography variant="h4" style={{ fontWeight: 700 }}>
         Swap
       </Typography>
+        </Box>
+        <SlippageSelector 
+          slippage={slippage} 
+          onSlippageChange={setSlippage} 
+        />
+      </Box>
+      
       <SwapInputComponent
         setQuoting={quotebag.setQuoting}
         direction="up"
@@ -166,6 +161,48 @@ export default function SwapComponentCard(props: SwapComponentCardProps) {
         inputToken={inputToken}
         setInputToken={setInputToken}
       />
+      
+      {/* Percentage buttons for input token */}
+      <Box sx={{ mt: 1, mb: 2 }}>
+        <PercentageButtons 
+          onPercentageClick={handlePercentageClick}
+          maxValue={maxInputAmount}
+          label={`of ${inputToken.symbol || 'token'} balance`}
+        />
+      </Box>
+      
+      {/* Swap direction button */}
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          my: -1, 
+          position: 'relative', 
+          zIndex: 2 
+        }}
+      >
+        <Box 
+          sx={{ 
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            borderRadius: '50%',
+            width: 40,
+            height: 40,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            border: '1px solid rgba(255, 193, 7, 0.3)',
+            transition: 'all 0.2s ease',
+            '&:hover': {
+              backgroundColor: 'rgba(255, 193, 7, 0.1)',
+            }
+          }}
+          onClick={handleSwapPositions}
+        >
+          <SwapVertIcon sx={{ color: '#FFC107' }} />
+        </Box>
+      </Box>
+      
       <SwapInputComponent
         setQuoting={quotebag.setQuoting}
         direction="down"
@@ -176,16 +213,66 @@ export default function SwapComponentCard(props: SwapComponentCardProps) {
         inputToken={outputToken}
         setInputToken={setOutputToken}
       />
-      <Card sx={{ p: 0, m: 0, borderRadius: 1 }}>
+      
+      {/* Swap Rate Display */}
+      {!quotebag.quoting && quotebag.quote && quotebag.quote !== "0" && (
+        <Box sx={{ mb: 2, mt: 1, textAlign: 'right' }}>
+          <Typography variant="caption" sx={{ color: '#999' }}>
+            1 {inputToken.symbol} ≈ {(Number(quotebag.quote) / Number(inputAmount)).toFixed(6)} {outputToken.symbol}
+          </Typography>
+        </Box>
+      )}
+      
+      {/* Slippage info */}
+      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="caption" sx={{ color: '#999' }}>
+          Slippage Tolerance: {slippage}%
+        </Typography>
+        <Typography variant="caption" sx={{ color: '#999' }}>
+          Est. Fee: 0.25%
+        </Typography>
+      </Box>
+      
+      <Card 
+        sx={{ 
+          p: 0, 
+          m: 0, 
+          borderRadius: 2, 
+          background: 'linear-gradient(45deg, #FFC107, #FFA000)',
+          overflow: 'hidden',
+          transition: 'all 0.3s ease',
+          '&:hover': {
+            transform: 'translateY(-2px)',
+            boxShadow: '0 6px 12px rgba(255, 193, 7, 0.3)',
+          }
+        }}
+      >
         <Button
-          color="secondary"
+          color="inherit"
           variant="contained"
           fullWidth
           size="large"
-          disabled={swapping}
-          onClick={() => setSwapping(true)}
+          disabled={swapping || quotebag.quoting || !connected || Number(quotebag.quote) <= 0}
+          onClick={handleSwap}
+          sx={{ 
+            py: 1.5, 
+            color: '#000000', 
+            fontWeight: 700,
+            fontSize: '1.1rem',
+            textTransform: 'none',
+            '&:disabled': {
+              backgroundColor: 'rgba(255, 193, 7, 0.5)',
+              color: 'rgba(0, 0, 0, 0.6)',
+            }
+          }}
         >
-          {swapping ? "Swapping" : "Swap"}
+          {!connected 
+            ? "Connect Wallet" 
+            : swapping 
+              ? "Swapping..." 
+              : quotebag.quoting 
+                ? "Fetching Price..." 
+                : "Swap"}
         </Button>
       </Card>
     </Card>

@@ -15,26 +15,39 @@ const theme = createTheme({
   palette: {
     mode: "dark",
     background: {
-      default: "#1A1B1F",
-      paper: "#1A1B1F",
+      default: "#000000",
+      paper: "rgba(0, 0, 0, 0.6)",
     },
     primary: {
-      main: "#1A1B1F",
+      main: "#000000",
     },
     secondary: {
-      main: "#8AC9E4",
+      main: "#FFC107", // Yellow accent color
     },
     error: {
       main: red.A400,
     },
+    text: {
+      primary: "#FFFFFF",
+      secondary: "#FFC107",
+    },
   },
   typography: {
     fontFamily: "Inter",
+    h4: {
+      fontFamily: "Quantico",
+      fontWeight: 700,
+      color: "#FFC107",
+    },
+    button: {
+      fontFamily: "Quantico",
+      fontWeight: 600,
+    },
   },
   components: {
     MuiCssBaseline: {
       styleOverrides: {
-        scrollbarColor: "black",
+        scrollbarColor: "#FFC107 #000000",
       },
     },
     MuiAlert: {
@@ -44,6 +57,18 @@ const theme = createTheme({
             backgroundColor: "#60a5fa",
           }),
         }),
+      },
+    },
+    MuiButton: {
+      styleOverrides: {
+        containedSecondary: {
+          backgroundColor: "#FFC107",
+          color: "#000000",
+          fontWeight: 600,
+          "&:hover": {
+            backgroundColor: "#FFA000",
+          },
+        },
       },
     },
   },

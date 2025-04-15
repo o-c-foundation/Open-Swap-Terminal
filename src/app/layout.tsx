@@ -15,6 +15,7 @@ import {
   SolflareWalletAdapter,
 } from "@solana/wallet-adapter-wallets";
 import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
+import { RPCProvider } from "@/util/RPCContext";
 
 export default function RootLayout(props: { children: React.ReactNode }) {
   const network = WalletAdapterNetwork.Mainnet;
@@ -30,11 +31,13 @@ export default function RootLayout(props: { children: React.ReactNode }) {
           <ThemeProvider theme={theme}>
             {/* CssBaseline kickstart an elegant, consistent, and simple baseline to build upon. */}
             <CssBaseline />
-            <ConnectionProvider endpoint={clusterApiUrl("mainnet-beta")}>
-              <WalletProvider wallets={wallets} autoConnect={true}>
-                <WalletModalProvider>{props.children}</WalletModalProvider>
-              </WalletProvider>
-            </ConnectionProvider>
+            <RPCProvider>
+              <ConnectionProvider endpoint="https://solana-mainnet.g.alchemy.com/v2/J4PaMKWa3tX2A7mgEz97F6jJtfnV9R2o">
+                <WalletProvider wallets={wallets} autoConnect={true}>
+                  <WalletModalProvider>{props.children}</WalletModalProvider>
+                </WalletProvider>
+              </ConnectionProvider>
+            </RPCProvider>
           </ThemeProvider>
         </AppRouterCacheProvider>
       </body>

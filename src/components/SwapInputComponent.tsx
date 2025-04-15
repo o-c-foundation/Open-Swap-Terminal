@@ -62,27 +62,33 @@ export default function SwapInputComponent(props: SwapInputComponentProps) {
         container
         sx={{
           mb: 3,
-          borderRadius: 1,
-          backgroundColor: "#FAFAFA",
-          borderColor: "rgba(138,201,228,0.2)",
-          borderWidth: 2,
+          borderRadius: 3,
+          backgroundColor: "rgba(13, 13, 13, 0.6)",
+          borderColor: direction === "up" 
+            ? "rgba(255, 193, 7, 0.3)" 
+            : "rgba(255, 255, 255, 0.1)",
+          borderWidth: 1,
           borderStyle: "solid",
           p: 2,
+          backdropFilter: "blur(5px)",
+          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
+          transition: "all 0.3s ease",
+          "&:hover": {
+            borderColor: "rgba(255, 193, 7, 0.5)",
+            boxShadow: "0 6px 16px rgba(0, 0, 0, 0.3)",
+          },
         }}
       >
         <Grid
           item
           xs={direction == "up" ? 6 : 9}
           sx={{
-            borderWidth: 2,
-            borderRadius: 1,
-            backgroundColor: "#FAFAFA",
+            backgroundColor: "transparent",
           }}
         >
           <TextField
             value={String(value)}
             variant="standard"
-            defaultValue="1"
             label={direction === "up" ? "From:" : "To:"}
             type="text"
             size="medium"
@@ -90,26 +96,33 @@ export default function SwapInputComponent(props: SwapInputComponentProps) {
             InputProps={{
               disableUnderline: true,
               style: {
-                fontSize: 18,
-                color: "gray",
+                fontSize: 20,
                 opacity: 1,
-                WebkitTextFillColor: direction === "up" ? "black" : "gray",
+                WebkitTextFillColor: direction === "up" ? "#FFFFFF" : "#AAAAAA",
               },
             }}
             InputLabelProps={{
-              style: { color: "#8AC9E4", fontWeight: "bold" },
+              style: { 
+                color: direction === "up" ? "#FFC107" : "#888888", 
+                fontWeight: "bold",
+                fontSize: "14px", 
+              },
             }}
             fullWidth
             sx={{
               margin: "auto",
-              backgroundColor: "#FAFAFA",
+              backgroundColor: "transparent",
               borderRadius: 10,
               borderStyle: "hidden",
             }}
           />
           <Typography
             variant="caption"
-            sx={{ fontSize: "14px", color: "#AFB4C0" }}
+            sx={{ 
+              fontSize: "12px", 
+              color: direction === "up" ? "#FFC107" : "#888888",
+              opacity: 0.9,
+            }}
           >
             Balance: {inputToken.uiAmount}
           </Typography>
@@ -128,8 +141,15 @@ export default function SwapInputComponent(props: SwapInputComponentProps) {
                     paddingTop: 0,
                     paddingBottom: 0,
                     fontSize: 10,
-                    borderColor: "#8AC9E4",
-                    borderWidth: 2,
+                    borderColor: "#FFC107",
+                    color: "#FFC107",
+                    fontWeight: 600,
+                    borderWidth: 1,
+                    mb: 1,
+                    "&:hover": {
+                      borderColor: "#FFA000",
+                      backgroundColor: "rgba(255, 193, 7, 0.1)",
+                    },
                   }}
                   onClick={() => {
                     setValue(inputToken.uiAmount.toString());
@@ -141,10 +161,17 @@ export default function SwapInputComponent(props: SwapInputComponentProps) {
               )}
               <Button
                 sx={{
-                  borderRadius: 1,
+                  borderRadius: 2,
+                  backgroundColor: "rgba(0, 0, 0, 0.3)",
+                  border: "1px solid rgba(255, 193, 7, 0.3)",
+                  color: "#FFC107",
+                  "&:hover": {
+                    backgroundColor: "rgba(0, 0, 0, 0.5)",
+                    borderColor: "#FFC107",
+                  },
                 }}
                 size="medium"
-                startIcon={<Avatar src={inputToken.logo} />}
+                startIcon={<Avatar src={inputToken.logo} sx={{ width: 24, height: 24 }} />}
                 fullWidth
                 onClick={() => {
                   if (setChangesSide)

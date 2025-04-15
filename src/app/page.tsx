@@ -7,11 +7,12 @@ import Link from "@mui/material/Link";
 import NextLink from "next/link";
 import ProTip from "@/components/ProTip";
 import Copyright from "@/components/Copyright";
+import { Card, Button, CircularProgress } from "@mui/material";
+import Grid from "@mui/material/Grid";
 
 import SwapInputComponent from "@/components/SwapInputComponent";
 import CoinSelectDialog from "@/components/CoinSelectDialog";
 import { CoinlistItem, defaultList } from "@/types/CoinList";
-import { Card, Button } from "@mui/material";
 import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
 
 import DappBar from "@/components/DappBar";
@@ -28,141 +29,253 @@ import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { PublicKey, clusterApiUrl } from "@solana/web3.js";
 import SwapComponentCard from "@/components/SwapComponentCard";
 import "./global.css";
-import useRaydiumQuote from "@/hooks/useRaydiumQuote";
+import useJupiterSwap from "@/hooks/useJupiterSwap";
 import { privateConnection } from "@/util/privateRpc";
+import { getJupiterTokens } from "@/util/jupiterTokens";
+import { useEffect, useState } from "react";
 
 export default function Home() {
-  const [inputAmount, setInputAmount] = React.useState("1");
-  const [outputAmount, setOutputAmount] = React.useState("0");
-  const [coinList, setCoinList] = React.useState<CoinlistItem[]>(defaultList);
-  const [tokenA, setTokenA] = React.useState<CoinlistItem>(coinList[0]);
-  const [tokenB, setTokenB] = React.useState<CoinlistItem>(coinList[2]);
-  const [coinListLoading, setCoinListLoading] = React.useState<boolean>(false);
-  const [addNewInput, setAddNewInput] = React.useState("");
+  const {
+    publicKey,
+    connected,
+    wallet,
+  } = useWallet();
 
-  React.useEffect(() => {
-    console.log(
-      `token A: ${tokenA.mint.toString()} token B: ${tokenB.mint.toString()}`
-    );
-  }, [tokenA.mint, tokenB.mint]);
-  React.useEffect(() => {
-    setTokenA(
-      coinList.find(
-        (item) =>
-          item.mint.toString() === "So11111111111111111111111111111111111111112"
-      )!
-    );
-  }, [coinList[0].balance]);
-
-  // const calculatedOutputAmount = React.useMemo(() => {
-  //   async function calculatedAmountFFI() {
-  //     const amountLamports = Number(inputAmount) * 10 ** tokenA.decimals;
-  //     const quoteResponse = await (
-  //       await fetch(
-  //         `https://quote-api.jup.ag/v6/quote?inputMint=${tokenA.mint.toString()}&outputMint=${tokenB.mint.toString()}&amount=${amountLamports}&slippageBps=50`
-  //       )
-  //     ).json();
-  //     //set outputAmount as the UI version of the output amount from the jupiter API response
-  //     console.log(quoteResponse);
-  //     const outAmount = quoteResponse.outAmount;
-  //     const uiAmount = outAmount / 10 ** tokenB.decimals;
-  //   }
-  //   calculatedAmountFFI();
-  // }, [inputAmount, tokenA.mint.toString(), tokenB.mint.toString()]);
-
-  const [modalOpen, setModalOpen] = React.useState(false);
-  const [changesSide, setChangesSide] = React.useState<"A" | "B">("A");
-  const { wallet } = useWallet();
-
-  const [swapping, setSwapping] = React.useState(false);
-  const quoteBag = useRaydiumQuote(
-    privateConnection,
-    wallet!,
-    tokenA,
-    tokenB,
-    inputAmount,
-    50
-  );
-  const { quote, quoting, setQuoting, poolKeys, setPoolKeys } = quoteBag;
-
-  React.useEffect(() => {
-    if (
-      window?.location.hostname === "localhost" ||
-      window?.location.hostname.endsWith("netlify.app")
-    ) {
-      //ok
-    } else {
-      throw Error("This is not localhost or netlify.app");
-    }
+  // Initialize tokens state
+  const [tokenList, setTokenList] = useState<CoinlistItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Load Jupiter tokens
+  useEffect(() => {
+    const loadTokens = async () => {
+      try {
+        setLoading(true);
+        const tokens = await getJupiterTokens();
+        setTokenList(tokens);
+      } catch (error) {
+        console.error("Error loading tokens:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadTokens();
   }, []);
 
+  // Find default tokens (SOL and USDC)
+  const findTokenBySymbol = (symbol: string) => {
+    return tokenList.find(token => token.symbol === symbol) || tokenList[0];
+  };
+
+  // Define token state
+  const [changesSide, setChangesSide] = React.useState<"A" | "B">("A");
+  const [modalOpen, setModalOpen] = React.useState(false);
+  const [inputToken, setInputToken] = React.useState<CoinlistItem | null>(null);
+  const [outputToken, setOutputToken] = React.useState<CoinlistItem | null>(null);
+  const [inputAmount, setInputAmount] = React.useState("0.1");
+  const [outputAmount, setOutputAmount] = React.useState("0");
+  const [quoting, setQuoting] = React.useState(false);
+  const [quote, setQuote] = React.useState("0");
+  const [swapping, setSwapping] = React.useState(false);
+
+  // Set default tokens once token list is loaded
+  useEffect(() => {
+    if (tokenList.length > 0 && !inputToken && !outputToken) {
+      const sol = findTokenBySymbol("SOL");
+      const usdc = findTokenBySymbol("USDC");
+      
+      if (sol) setInputToken(sol);
+      if (usdc) setOutputToken(usdc);
+    }
+  }, [tokenList, inputToken, outputToken]);
+
+  // Use Jupiter swap hook
+  const jupiterSwap = useJupiterSwap(
+    privateConnection,
+    publicKey || undefined,
+    inputToken,
+    outputToken,
+    inputAmount,
+    0.5 // Default slippage of 0.5%
+  );
+
+  // Execute swap
+  const executeSwap = async () => {
+    if (!connected || !wallet) {
+      alert("Please connect your wallet first");
+      return;
+    }
+    
+    setSwapping(true);
+    try {
+      const adapter = wallet.adapter;
+      // Use optional chaining for signTransaction which might not be available
+      const signTransaction = (tx: any) => {
+        if (adapter && 'signTransaction' in adapter) {
+          return (adapter as any).signTransaction(tx);
+        }
+        throw new Error("Wallet doesn't support signTransaction");
+      };
+      
+      const success = await jupiterSwap.executeSwap(
+        signTransaction,
+        adapter.sendTransaction
+      );
+      
+      if (success) {
+        setInputAmount("0");
+        setOutputAmount("0");
+        // Could refresh balances here
+      }
+    } catch (error) {
+      console.error("Swap failed:", error);
+      alert(`Swap failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally {
+      setSwapping(false);
+    }
+  };
+
+  // Update quote when inputs change
+  useEffect(() => {
+    if (inputToken && outputToken && Number(inputAmount) > 0) {
+      setQuoting(true);
+      jupiterSwap.setQuoting(true);
+    } else {
+      setQuote("0");
+      setQuoting(false);
+    }
+  }, [inputToken, outputToken, inputAmount, jupiterSwap]);
+
+  // If tokens haven't loaded, show a loading indicator
+  if (loading) {
+    return (
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        height: '100vh',
+        background: 'linear-gradient(to bottom, #000000, #111111)'
+      }}>
+        <CircularProgress size={60} sx={{ color: '#FFC107', mb: 3 }} />
+        <Typography variant="h6" sx={{ color: '#FFC107' }}>
+          Loading OpenSwap...
+        </Typography>
+      </Box>
+    );
+  }
+
+  // Helper function for type casting
+  const safeToken = (token: CoinlistItem | null): CoinlistItem => {
+    if (!token) {
+      // Return a default token if null - should never happen in practice
+      // because of the null checks in the JSX
+      return tokenList[0] || {
+        mint: new PublicKey("So11111111111111111111111111111111111111112"),
+        name: "Solana",
+        symbol: "SOL",
+        logo: "",
+        decimals: 9,
+        uiAmount: 0
+      };
+    }
+    return token;
+  };
+
   return (
-    <>
+    <div>
       <DappBar />
       <Container maxWidth="sm">
-        <SwapComponentCard
-          quotebag={quoteBag}
-          direction="up"
-          setChangesSide={setChangesSide}
-          setModalOpen={setModalOpen}
-          inputToken={tokenA}
-          outputToken={tokenB}
-          setInputToken={setTokenB}
-          setOutputToken={setTokenA}
-          inputAmount={inputAmount}
-          setInputAmount={setInputAmount}
-          outputAmount={outputAmount}
-          setOutputAmount={setOutputAmount}
-          swapping={swapping}
-          setSwapping={setSwapping}
-        />
-        {/*  <Card sx={{ my: 5, borderRadius: 4, p: 5 }}>
-          <SwapInputComponent
-            direction="up"
-            value={Number(inputAmount)}
-            setValue={setInputAmount}
-            changesSide={setChangesSide}
-            setModalOpen={setModalOpen}
-            inputToken={tokenA}
-            setInputToken={setTokenA}
-          />
-          <SwapInputComponent
-            direction="down"
-            value={Number(calculatedOutputAmount)}
-            setValue={setInputAmount}
-            changesSide={setChangesSide}
-            setModalOpen={setModalOpen}
-            inputToken={tokenB}
-            setInputToken={setTokenB}
-          />
-          <Card sx={{ p: 0, m: 0, borderRadius: 4 }}>
-            <Button
-              color="secondary"
+        <Box sx={{ width: '100%', padding: 2 }}>
+          {/* Navigation links */}
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            gap: 2, 
+            mb: 2
+          }}>
+            <Button 
+              component={NextLink} 
+              href="/"
               variant="contained"
-              fullWidth
-              size="large"
-              disabled={swapping}
-              onClick={swapFFI}
-
+              sx={{ 
+                bgcolor: 'rgba(255, 193, 7, 1)', 
+                color: '#000',
+                '&:hover': {
+                  bgcolor: 'rgba(255, 193, 7, 0.8)',
+                }
+              }}
             >
-              {swapping ? "Swapping" : "Swap"}
+              Swap
             </Button>
-          </Card>
-  </Card> */}
-        <CoinSelectDialog
-          setQuoting={quoteBag.setQuoting}
-          open={modalOpen}
-          setModalOpen={setModalOpen}
-          changesSide={changesSide}
-          setInputToken={changesSide == "A" ? setTokenA : setTokenB}
-          coinList={coinList}
-          setCoinList={setCoinList}
-          coinListLoading={coinListLoading}
-          setCoinListLoading={setCoinListLoading}
-          addNewInput={addNewInput}
-          setAddNewInput={setAddNewInput}
-        />
+            <Button 
+              component={NextLink} 
+              href="/charts"
+              variant="outlined"
+              sx={{ 
+                borderColor: 'rgba(255, 193, 7, 0.5)', 
+                color: '#FFC107',
+                '&:hover': {
+                  borderColor: 'rgba(255, 193, 7, 1)',
+                  bgcolor: 'rgba(255, 193, 7, 0.1)',
+                }
+              }}
+            >
+              Charts
+            </Button>
+          </Box>
+          
+          {inputToken && outputToken ? (
+            <SwapComponentCard
+              direction="up"
+              setChangesSide={setChangesSide}
+              setModalOpen={setModalOpen}
+              inputToken={safeToken(inputToken)}
+              setInputToken={setInputToken as any}
+              outputToken={safeToken(outputToken)}
+              setOutputToken={setOutputToken as any}
+              inputAmount={inputAmount}
+              setInputAmount={setInputAmount}
+              outputAmount={outputAmount}
+              setOutputAmount={setOutputAmount}
+              swapping={swapping}
+              setSwapping={executeSwap}
+              quotebag={{
+                quoting: quoting,
+                setQuoting: setQuoting,
+                quote: quote,
+              }}
+            />
+          ) : (
+            <Box sx={{ textAlign: 'center', my: 5 }}>
+              <CircularProgress size={40} sx={{ color: '#FFC107', mb: 2 }} />
+              <Typography>Loading tokens...</Typography>
+            </Box>
+          )}
+          
+          <Box sx={{ textAlign: 'center', mt: 2, opacity: 0.7 }}>
+            <Typography variant="caption" sx={{ color: '#AAA' }}>
+              Powered by{' '}
+              <Link href="https://jup.ag" target="_blank" sx={{ color: '#FFC107' }}>
+                Jupiter
+              </Link>
+            </Typography>
+          </Box>
+        </Box>
       </Container>
-    </>
+      <CoinSelectDialog
+        open={modalOpen}
+        setModalOpen={setModalOpen}
+        changesSide={changesSide}
+        setInputToken={setInputToken as any}
+        coinList={tokenList}
+        setCoinList={setTokenList}
+        coinListLoading={loading}
+        setCoinListLoading={setLoading}
+        addNewInput={""}
+        setAddNewInput={() => {}}
+        setQuoting={setQuoting}
+      />
+    </div>
   );
 }
