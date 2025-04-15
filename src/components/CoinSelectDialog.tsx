@@ -31,7 +31,7 @@ import { CoinlistItem, defaultList } from "@/types/CoinList";
 import { Connection, clusterApiUrl, PublicKey } from "@solana/web3.js";
 import { Metaplex } from "@metaplex-foundation/js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { getJupiterTokens, getUserTokenBalances } from "@/util/jupiterTokens";
+import { getHeliusTokens, getUserTokenBalancesHelius } from "@/util/heliusTokens";
 import { privateConnection } from "@/util/privateRpc";
 
 interface CoinSelectDialogProps {
@@ -74,14 +74,14 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
   
   const { publicKey, connected } = useWallet();
 
-  // Load Jupiter tokens when dialog opens
+  // Load Helius DAS tokens when dialog opens
   useEffect(() => {
     let isActive = true;
     let timeoutId: NodeJS.Timeout | null = null;
 
-    async function loadJupiterTokens() {
+    async function loadHeliusTokens() {
       if (open) {
-        console.log("CoinSelectDialog: Starting to load tokens...");
+        console.log("CoinSelectDialog: Starting to load tokens from Helius DAS API...");
         
         // Set a timeout to prevent the loading state from getting stuck
         timeoutId = setTimeout(() => {
@@ -91,48 +91,46 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
             setErrorMessage("Token loading timed out. Please try again.");
             setErrorOpen(true);
           }
-        }, 10000); // 10 second timeout
+        }, 15000); // 15 second timeout (slightly longer for DAS API)
         
         try {
-        setCoinListLoading(true);
-          console.log("CoinSelectDialog: Fetching tokens from Jupiter...");
-          // Fetch tokens from Jupiter
-          const jupiterTokens = await getJupiterTokens(100);
-          if (!isActive) return;
+          setCoinListLoading(true);
+          console.log("CoinSelectDialog: Fetching tokens from Helius DAS API...");
           
-          console.log(`CoinSelectDialog: Received ${jupiterTokens.length} tokens from Jupiter`);
-          
-          if (jupiterTokens.length > 0) {
-            // If user is connected, get their balances
-            if (connected && publicKey) {
-              console.log("CoinSelectDialog: User connected, fetching token balances...");
-              try {
-                const tokensWithBalances = await getUserTokenBalances(
-                  connection,
-                  publicKey.toBase58(),
-                  jupiterTokens
-                );
+          // Fetch tokens from Helius DAS API
+          if (connected && publicKey) {
+            console.log("CoinSelectDialog: User connected, fetching owned tokens...");
+            try {
+              const walletTokens = await getUserTokenBalancesHelius(publicKey.toBase58());
+              if (!isActive) return;
+              
+              if (walletTokens.length > 0) {
+                console.log("CoinSelectDialog: User has tokens, using owned tokens list");
+                setCoinList(walletTokens);
+              } else {
+                console.log("CoinSelectDialog: User has no tokens, fetching popular tokens");
+                const popularTokens = await getHeliusTokens(100);
                 if (!isActive) return;
-                
-                console.log("CoinSelectDialog: Token balances loaded successfully");
-                setCoinList(tokensWithBalances);
-              } catch (balanceError) {
-                console.error("Error loading token balances:", balanceError);
-                if (!isActive) return;
-                
-                setCoinList(jupiterTokens);
+                setCoinList(popularTokens);
               }
-            } else {
-              console.log("CoinSelectDialog: User not connected, using default token list");
-              setCoinList(jupiterTokens);
+            } catch (balanceError) {
+              console.error("Error loading owned tokens:", balanceError);
+              if (!isActive) return;
+              
+              // Fallback to popular tokens
+              console.log("CoinSelectDialog: Error fetching owned tokens, falling back to popular tokens");
+              const popularTokens = await getHeliusTokens(100);
+              if (!isActive) return;
+              setCoinList(popularTokens);
             }
           } else {
-            console.warn("CoinSelectDialog: Received empty token list from Jupiter");
-            setErrorMessage("No tokens received from Jupiter API");
-            setErrorOpen(true);
+            console.log("CoinSelectDialog: User not connected, fetching popular tokens");
+            const popularTokens = await getHeliusTokens(100);
+            if (!isActive) return;
+            setCoinList(popularTokens);
           }
         } catch (error) {
-          console.error("Error loading Jupiter tokens:", error);
+          console.error("Error loading Helius DAS tokens:", error);
           if (!isActive) return;
           
           setErrorMessage(`Failed to load tokens: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -148,14 +146,14 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
       }
     }
     
-    loadJupiterTokens();
+    loadHeliusTokens();
     
     // Cleanup function
     return () => {
       isActive = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [open, connected, publicKey, connection, setCoinList, setCoinListLoading]);
+  }, [open, connected, publicKey, setCoinList, setCoinListLoading]);
 
   // Filter tokens based on search term
   useEffect(() => {
@@ -207,42 +205,58 @@ export default function CoinSelectDialog(props: CoinSelectDialogProps) {
         return;
       }
       
-      // Attempt to create a PublicKey instance to validate
-      const mintPublicKey = new PublicKey(mint);
       setCoinListLoading(true);
       
-      // Fetch token details from Metaplex
-    const metaplex = new Metaplex(connection);
-    const nft = await metaplex
-      .nfts()
-        .findByMint({ mintAddress: mintPublicKey });
-
-    if (nft) {
-        if (nft.json?.name) {
-        const newCoin: CoinlistItem = {
-            name: nft.json.name || "Unknown Token",
-            logo: nft.json.image || "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
-          mint: nft.mint.address,
-          decimals: nft.mint.decimals,
-          uiAmount: 0,
-            symbol: nft.json.symbol || nft.json.name.slice(0, 5),
-        };
-          
-        setCoinList([newCoin, ...coinList]);
-          setInputToken(newCoin);
-          setModalOpen(false);
-        setQuoting(true);
-        } else {
-          setErrorMessage("Token metadata not found");
-          setErrorOpen(true);
+      // Fetch token using Helius DAS API
+      const payload = {
+        jsonrpc: "2.0",
+        id: "custom-token",
+        method: "getAsset",
+        params: {
+          id: mint
         }
-      } else {
-        setErrorMessage("Token not found");
-        setErrorOpen(true);
+      };
+
+      const response = await fetch("https://mainnet.helius-rpc.com", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Helius API returned ${response.status}: ${response.statusText}`);
       }
+
+      const data = await response.json();
+      
+      if (!data.result) {
+        throw new Error('Token not found');
+      }
+
+      const token = data.result;
+      
+      // Create new coin list item
+      const newToken: CoinlistItem = {
+        mint: new PublicKey(token.mint.address),
+        name: token.content?.metadata?.name || token.mint.address.slice(0, 8),
+        symbol: token.content?.metadata?.symbol || token.mint.address.slice(0, 4),
+        decimals: token.mint.decimals,
+        logo: token.content?.metadata?.image || 
+          'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+        balance: token.ownership?.amount || 0,
+        uiAmount: (token.ownership?.amount || 0) / Math.pow(10, token.mint.decimals),
+      };
+      
+      // Add to token list
+      setCoinList([newToken, ...coinList]);
+      setInputToken(newToken);
+      setModalOpen(false);
+      setQuoting(true);
     } catch (error) {
-      console.error("Error adding token:", error);
-      setErrorMessage("Invalid mint address");
+      console.error("Error adding custom token:", error);
+      setErrorMessage(`Failed to add token: ${error instanceof Error ? error.message : "Unknown error"}`);
       setErrorOpen(true);
     } finally {
       setCoinListLoading(false);

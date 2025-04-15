@@ -31,7 +31,7 @@ import SwapComponentCard from "@/components/SwapComponentCard";
 import "./global.css";
 import useJupiterSwap from "@/hooks/useJupiterSwap";
 import { privateConnection } from "@/util/privateRpc";
-import { getJupiterTokens } from "@/util/jupiterTokens";
+import { getHeliusTokens } from "@/util/heliusTokens";
 import { useEffect, useState } from "react";
 
 export default function Home() {
@@ -45,12 +45,12 @@ export default function Home() {
   const [tokenList, setTokenList] = useState<CoinlistItem[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Load Jupiter tokens
+  // Load tokens using Helius DAS API
   useEffect(() => {
     const loadTokens = async () => {
       try {
         setLoading(true);
-        const tokens = await getJupiterTokens();
+        const tokens = await getHeliusTokens(100);
         setTokenList(tokens);
       } catch (error) {
         console.error("Error loading tokens:", error);

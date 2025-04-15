@@ -5,7 +5,7 @@ import DappBar from "@/components/DappBar";
 import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { CoinlistItem } from "@/types/CoinList";
-import { getJupiterTokens } from "@/util/jupiterTokens";
+import { getHeliusTokens } from "@/util/heliusTokens";
 import { useRPC } from "@/util/RPCContext";
 import NextLink from "next/link";
 
@@ -16,12 +16,12 @@ export default function ChartsPage() {
   const [tokenList, setTokenList] = useState<CoinlistItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load token list 
+  // Load token list using Helius DAS API
   useEffect(() => {
     async function loadTokens() {
       try {
         setLoading(true);
-        const tokens = await getJupiterTokens(100);
+        const tokens = await getHeliusTokens(100);
         setTokenList(tokens);
         // Default to SOL
         setSelectedToken(tokens.find(t => t.symbol === 'SOL') || tokens[0]);
