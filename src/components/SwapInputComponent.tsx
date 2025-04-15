@@ -58,8 +58,7 @@ export default function SwapInputComponent(props: SwapInputComponentProps) {
 
   return (
     <>
-      <Grid
-        container
+      <Box
         sx={{
           mb: 3,
           borderRadius: 3,
@@ -77,13 +76,15 @@ export default function SwapInputComponent(props: SwapInputComponentProps) {
             borderColor: "rgba(255, 193, 7, 0.5)",
             boxShadow: "0 6px 16px rgba(0, 0, 0, 0.3)",
           },
+          display: 'flex',
+          flexWrap: 'wrap',
         }}
       >
-        <Grid
-          item
-          xs={direction == "up" ? 6 : 9}
+        <Box
           sx={{
             backgroundColor: "transparent",
+            flexBasis: direction == "up" ? '50%' : '75%',
+            maxWidth: direction == "up" ? '50%' : '75%',
           }}
         >
           <TextField
@@ -126,66 +127,64 @@ export default function SwapInputComponent(props: SwapInputComponentProps) {
           >
             Balance: {inputToken.uiAmount}
           </Typography>
-        </Grid>
-        <Grid item xs={direction === "up" ? 4 : 1}></Grid>
+        </Box>
+        <Box sx={{ flexBasis: direction === "up" ? '33.33%' : '8.33%' }}></Box>
         {true && (
-          <>
-            <Grid item xs={2}>
-              {direction === "up" && (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  fullWidth
-                  sx={{
-                    borderRadius: 1,
-                    paddingTop: 0,
-                    paddingBottom: 0,
-                    fontSize: 10,
-                    borderColor: "#FFC107",
-                    color: "#FFC107",
-                    fontWeight: 600,
-                    borderWidth: 1,
-                    mb: 1,
-                    "&:hover": {
-                      borderColor: "#FFA000",
-                      backgroundColor: "rgba(255, 193, 7, 0.1)",
-                    },
-                  }}
-                  onClick={() => {
-                    setValue(inputToken.uiAmount.toString());
-                    setQuoting(true);
-                  }}
-                >
-                  Max
-                </Button>
-              )}
+          <Box sx={{ flexBasis: '16.67%', maxWidth: '16.67%' }}>
+            {direction === "up" && (
               <Button
+                variant="outlined"
+                size="small"
+                fullWidth
                 sx={{
-                  borderRadius: 2,
-                  backgroundColor: "rgba(0, 0, 0, 0.3)",
-                  border: "1px solid rgba(255, 193, 7, 0.3)",
+                  borderRadius: 1,
+                  paddingTop: 0,
+                  paddingBottom: 0,
+                  fontSize: 10,
+                  borderColor: "#FFC107",
                   color: "#FFC107",
+                  fontWeight: 600,
+                  borderWidth: 1,
+                  mb: 1,
                   "&:hover": {
-                    backgroundColor: "rgba(0, 0, 0, 0.5)",
-                    borderColor: "#FFC107",
+                    borderColor: "#FFA000",
+                    backgroundColor: "rgba(255, 193, 7, 0.1)",
                   },
                 }}
-                size="medium"
-                startIcon={<Avatar src={inputToken.logo} sx={{ width: 24, height: 24 }} />}
-                fullWidth
                 onClick={() => {
-                  if (setChangesSide)
-                    setChangesSide(direction === "up" ? "A" : "B");
-                  setModalOpen(true);
+                  setValue(inputToken.uiAmount.toString());
+                  setQuoting(true);
                 }}
               >
-                {inputToken.symbol}
-                <KeyboardArrowDownIcon />
+                Max
               </Button>
-            </Grid>
-          </>
+            )}
+            <Button
+              sx={{
+                borderRadius: 2,
+                backgroundColor: "rgba(0, 0, 0, 0.3)",
+                border: "1px solid rgba(255, 193, 7, 0.3)",
+                color: "#FFC107",
+                "&:hover": {
+                  backgroundColor: "rgba(0, 0, 0, 0.5)",
+                  borderColor: "#FFC107",
+                },
+              }}
+              size="medium"
+              startIcon={<Avatar src={inputToken.logo} sx={{ width: 24, height: 24 }} />}
+              fullWidth
+              onClick={() => {
+                if (setChangesSide)
+                  setChangesSide(direction === "up" ? "A" : "B");
+                setModalOpen(true);
+              }}
+            >
+              {inputToken.symbol}
+              <KeyboardArrowDownIcon />
+            </Button>
+          </Box>
         )}
-      </Grid>
+      </Box>
     </>
   );
 }
