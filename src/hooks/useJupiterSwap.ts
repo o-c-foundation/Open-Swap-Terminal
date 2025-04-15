@@ -34,6 +34,13 @@ export default function useJupiterSwap(
       }
 
       try {
+        console.log("useJupiterSwap: Starting quote fetch...", {
+          inputMint: inputToken.mint.toBase58(),
+          outputMint: outputToken.mint.toBase58(),
+          amount: Number(inputAmount) * Math.pow(10, inputToken.decimals),
+          slippage: Math.round(Number(slippage) * 100)
+        });
+        
         setQuoting(true);
         const amountLamports = Number(inputAmount) * Math.pow(10, inputToken.decimals);
         
@@ -47,18 +54,30 @@ export default function useJupiterSwap(
         });
 
         if (quoteResponse) {
+          console.log("useJupiterSwap: Quote received successfully", {
+            outAmount: quoteResponse.outAmount,
+            routes: quoteResponse.routePlan?.length || 0
+          });
+          
           const outAmount = quoteResponse.outAmount;
           const uiAmount = Number(outAmount) / Math.pow(10, outputToken.decimals);
           setQuote(uiAmount.toString());
           setInputTokenAmount(amountLamports);
           setOutputTokenAmount(outAmount);
           setTransaction(quoteResponse);
+        } else {
+          console.warn("useJupiterSwap: Empty quote response received");
+          setQuote("0");
         }
       } catch (error) {
         console.error("Error getting Jupiter quote:", error);
+        if (error instanceof Error) {
+          console.error("Error details:", error.message, error.stack);
+        }
         setQuote("0");
       } finally {
         setQuoting(false);
+        console.log("useJupiterSwap: Quote fetch completed", { success: quote !== "0" });
       }
     }
 
