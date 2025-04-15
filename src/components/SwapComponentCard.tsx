@@ -12,9 +12,9 @@ import SlippageSelector from "./SlippageSelector";
 import PercentageButtons from "./PercentageButtons";
 
 interface SwapComponentCardProps {
-  direction: "up" | "down";
-  setChangesSide: React.Dispatch<React.SetStateAction<"A" | "B">>;
-  setModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  direction?: "up" | "down";
+  setChangesSide?: React.Dispatch<React.SetStateAction<"A" | "B">>;
+  setModalOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   inputToken: CoinlistItem;
   setInputToken: React.Dispatch<React.SetStateAction<CoinlistItem>>;
   outputToken: CoinlistItem;
@@ -24,8 +24,13 @@ interface SwapComponentCardProps {
   outputAmount: string;
   setOutputAmount: React.Dispatch<React.SetStateAction<string>>;
   swapping: boolean;
-  setSwapping: (() => Promise<void>) | React.Dispatch<React.SetStateAction<boolean>>;
-  quotebag: any;
+  setSwapping?: (() => Promise<void>) | React.Dispatch<React.SetStateAction<boolean>>;
+  quotebag?: any;
+  quoting?: boolean;
+  setQuoting?: React.Dispatch<React.SetStateAction<boolean>>;
+  quote?: string;
+  executeSwap?: () => Promise<void>;
+  jupiterSwap?: any;
 }
 
 export default function SwapComponentCard(props: SwapComponentCardProps) {
@@ -44,6 +49,11 @@ export default function SwapComponentCard(props: SwapComponentCardProps) {
     quotebag,
     swapping,
     setSwapping,
+    quoting,
+    setQuoting,
+    quote,
+    executeSwap,
+    jupiterSwap,
   } = props;
 
   const {
@@ -56,9 +66,20 @@ export default function SwapComponentCard(props: SwapComponentCardProps) {
 
   const [slippage, setSlippage] = useState<number>(0.5); // Default 0.5%
 
+  // Provide fallback for quotebag/quoting
+  const quoteBagToUse = quotebag || { 
+    setQuoting: setQuoting || (() => {}),
+    quoting: quoting || false,
+    quote: quote || "0"
+  };
+
   const debounced = useDebouncedCallback(() => {
     console.log("debounced called");
-    quotebag.setQuoting(true);
+    if (quoteBagToUse.setQuoting) {
+      quoteBagToUse.setQuoting(true);
+    } else if (setQuoting) {
+      setQuoting(true);
+    }
   }, 800);
 
   // Swap token positions handler
@@ -66,8 +87,12 @@ export default function SwapComponentCard(props: SwapComponentCardProps) {
     const tempToken = inputToken;
     setInputToken(outputToken);
     setOutputToken(tempToken);
-    quotebag.setQuoting(true);
-  }, [inputToken, outputToken, setInputToken, setOutputToken, quotebag]);
+    if (quoteBagToUse.setQuoting) {
+      quoteBagToUse.setQuoting(true);
+    } else if (setQuoting) {
+      setQuoting(true);
+    }
+  }, [inputToken, outputToken, setInputToken, setOutputToken, quoteBagToUse, setQuoting]);
 
   // Execute swap handler
   const handleSwap = useCallback(() => {
@@ -76,12 +101,15 @@ export default function SwapComponentCard(props: SwapComponentCardProps) {
       return;
     }
     
-    if (typeof setSwapping === 'function') {
+    // Use either provided executeSwap or setSwapping
+    if (executeSwap) {
+      executeSwap();
+    } else if (typeof setSwapping === 'function') {
       (setSwapping as () => Promise<void>)();
-    } else {
+    } else if (setSwapping) {
       (setSwapping as React.Dispatch<React.SetStateAction<boolean>>)(true);
     }
-  }, [connected, setSwapping]);
+  }, [connected, setSwapping, executeSwap]);
 
   // Calculate max amount that can be swapped
   const maxInputAmount = useMemo(() => {
@@ -97,9 +125,13 @@ export default function SwapComponentCard(props: SwapComponentCardProps) {
         maxInputAmount > 1 ? 6 : 9
       );
       setInputAmount(amount);
-      quotebag.setQuoting(true);
+      if (quoteBagToUse.setQuoting) {
+        quoteBagToUse.setQuoting(true);
+      } else if (setQuoting) {
+        setQuoting(true);
+      }
     }
-  }, [maxInputAmount, setInputAmount, quotebag]);
+  }, [maxInputAmount, setInputAmount, quoteBagToUse, setQuoting]);
 
   return (
     <Card
@@ -151,13 +183,13 @@ export default function SwapComponentCard(props: SwapComponentCardProps) {
       </Box>
       
       <SwapInputComponent
-        setQuoting={quotebag.setQuoting}
+        setQuoting={quoteBagToUse.setQuoting}
         direction="up"
         debounced={debounced}
         value={inputAmount}
         setValue={setInputAmount}
-        setChangesSide={setChangesSide}
-        setModalOpen={setModalOpen}
+        setChangesSide={setChangesSide || undefined}
+        setModalOpen={setModalOpen || undefined}
         inputToken={inputToken}
         setInputToken={setInputToken}
       />
@@ -204,21 +236,22 @@ export default function SwapComponentCard(props: SwapComponentCardProps) {
       </Box>
       
       <SwapInputComponent
-        setQuoting={quotebag.setQuoting}
+        setQuoting={quoteBagToUse.setQuoting}
         direction="down"
-        value={quotebag.quoting ? "..." : quotebag.quote}
+        value={quoteBagToUse.quoting ? "..." : quoteBagToUse.quote}
         setValue={setOutputAmount}
-        setChangesSide={setChangesSide}
-        setModalOpen={setModalOpen}
+        setChangesSide={setChangesSide || undefined}
+        setModalOpen={setModalOpen || undefined}
         inputToken={outputToken}
         setInputToken={setOutputToken}
+        debounced={undefined}
       />
       
       {/* Swap Rate Display */}
-      {!quotebag.quoting && quotebag.quote && quotebag.quote !== "0" && (
+      {!quoteBagToUse.quoting && quoteBagToUse.quote && quoteBagToUse.quote !== "0" && (
         <Box sx={{ mb: 2, mt: 1, textAlign: 'right' }}>
           <Typography variant="caption" sx={{ color: '#999' }}>
-            1 {inputToken.symbol} ≈ {(Number(quotebag.quote) / Number(inputAmount)).toFixed(6)} {outputToken.symbol}
+            1 {inputToken.symbol} ≈ {(Number(quoteBagToUse.quote) / Number(inputAmount)).toFixed(6)} {outputToken.symbol}
           </Typography>
         </Box>
       )}
@@ -252,7 +285,7 @@ export default function SwapComponentCard(props: SwapComponentCardProps) {
           variant="contained"
           fullWidth
           size="large"
-          disabled={swapping || quotebag.quoting || !connected || Number(quotebag.quote) <= 0}
+          disabled={swapping || quoteBagToUse.quoting || !connected || Number(quoteBagToUse.quote) <= 0}
           onClick={handleSwap}
           sx={{ 
             py: 1.5, 
@@ -270,7 +303,7 @@ export default function SwapComponentCard(props: SwapComponentCardProps) {
             ? "Connect Wallet" 
             : swapping 
               ? "Swapping..." 
-              : quotebag.quoting 
+              : quoteBagToUse.quoting 
                 ? "Fetching Price..." 
                 : "Swap"}
         </Button>

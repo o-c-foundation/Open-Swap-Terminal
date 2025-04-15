@@ -195,8 +195,11 @@ export default function Home() {
       <DappBar />
       <Container component="main" sx={{ mt: 8, mb: 2 }} maxWidth="md">
         <Grid container spacing={4}>
-          <Grid item xs={12} md={12}>
+          <Grid sx={{ gridColumn: 'span 12' }}>
             <SwapComponentCard
+              direction="up"
+              setChangesSide={setChangesSide}
+              setModalOpen={setModalOpen}
               inputToken={safeToken(inputToken)}
               setInputToken={setInputToken as any}
               outputToken={safeToken(outputToken)}
@@ -211,6 +214,7 @@ export default function Home() {
               executeSwap={executeSwap}
               swapping={swapping}
               jupiterSwap={jupiterSwap}
+              quotebag={{ setQuoting }}
             />
           </Grid>
         </Grid>

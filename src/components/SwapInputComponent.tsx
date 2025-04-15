@@ -20,39 +20,49 @@ import theme from "@/theme";
 
 interface SwapInputComponentProps {
   direction: "up" | "down";
+  debounced?: (() => void);
   value: string;
   setValue: React.Dispatch<React.SetStateAction<string>>;
-  setChangesSide: React.Dispatch<React.SetStateAction<"A" | "B">>;
-  setModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setChangesSide?: React.Dispatch<React.SetStateAction<"A" | "B">>;
+  setModalOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   inputToken: CoinlistItem;
   setInputToken: React.Dispatch<React.SetStateAction<CoinlistItem>>;
-  debounced?: DebouncedState<() => void>;
-  setQuoting: React.Dispatch<React.SetStateAction<boolean>>;
+  setQuoting?: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export default function SwapInputComponent(props: SwapInputComponentProps) {
   const {
     direction,
+    debounced,
     value,
     setValue,
     setChangesSide,
     setModalOpen,
     inputToken,
     setInputToken,
-    debounced,
     setQuoting,
   } = props;
 
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("handleinputhcange called");
-    console.log("direction:", direction);
-    if (direction == "up") {
-      console.log("called debounced");
-      debounced!();
+  // Handle token selector click
+  const handleTokenSelectorClick = () => {
+    if (setChangesSide && setModalOpen) {
+      setChangesSide(direction === "up" ? "A" : "B");
+      setModalOpen(true);
     }
-    var reg = /^-?\d*\.?\d*$/;
-    if (reg.test(event.target.value)) {
-      setValue(event.target.value);
+  };
+
+  // Handle input change
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    
+    // Only allow valid number inputs
+    if (value === "" || /^[0-9]*[.,]?[0-9]*$/.test(value)) {
+      setValue(value);
+      
+      // Trigger debounced quote request
+      if (debounced) {
+        debounced();
+      }
     }
   };
 
@@ -153,7 +163,7 @@ export default function SwapInputComponent(props: SwapInputComponentProps) {
                 }}
                 onClick={() => {
                   setValue(inputToken.uiAmount.toString());
-                  setQuoting(true);
+                  setQuoting!(true);
                 }}
               >
                 Max
@@ -173,11 +183,7 @@ export default function SwapInputComponent(props: SwapInputComponentProps) {
               size="medium"
               startIcon={<Avatar src={inputToken.logo} sx={{ width: 24, height: 24 }} />}
               fullWidth
-              onClick={() => {
-                if (setChangesSide)
-                  setChangesSide(direction === "up" ? "A" : "B");
-                setModalOpen(true);
-              }}
+              onClick={handleTokenSelectorClick}
             >
               {inputToken.symbol}
               <KeyboardArrowDownIcon />
